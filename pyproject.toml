@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["bolt*"]
+
+[project]
+name = "bolt"
+version = "0.0.1"
+dependencies = [
+    "biopython",
+    "cyvcf2",
+    "pysam",
+    "pyyaml",
+]
+
+[project.scripts]
+bolt = "bolt.__main__:entry"

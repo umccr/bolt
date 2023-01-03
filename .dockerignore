@@ -1,0 +1,7 @@
+reference_data_store/
+venv/
+working/
+conda_snpeff/
+*vcf
+*gz
+*tsv
