@@ -15,12 +15,10 @@ from ... import util
 @click.option('--af_global_fp', required=True, type=click.Path(exists=True))
 @click.option('--af_keygenes_fp', required=True, type=click.Path(exists=True))
 
-# MDX210176.annotations.pass.vcf.gz
 @click.option('--smlv_somatic_vcf_fp', required=True, type=click.Path(exists=True))
 
 @click.option('--sv_somatic_tsv_fp', required=True, type=click.Path(exists=True))
 @click.option('--sv_somatic_vcf_fp', required=True, type=click.Path(exists=True))
-# MDX210176.cnv.prioritised.tsv
 @click.option('--cnv_somatic_tsv_fp', required=True, type=click.Path(exists=True))
 
 @click.option('--purple_baf_plot_fp', required=True, type=click.Path(exists=True))
@@ -28,7 +26,6 @@ from ... import util
 @click.option('--purple_dir', required=True, type=click.Path(exists=True))
 @click.option('--virusbreakend_dir', required=True, type=click.Path(exists=True))
 
-# somatic_driver/umccr_cancer_genes.latest.tsv
 @click.option('--cancer_genes_fp', required=True, type=click.Path(exists=True))
 
 @click.option('--output_dir', required=True, type=click.Path())
@@ -37,14 +34,8 @@ def entry(ctx, **kwargs):
     '''
 
     batch_name = f'{kwargs["subject_name"]}_{kwargs["tumor_name"]}'
-    #        --batch_name {batch_name} \
-    #        --batch_name {kwargs['subject_name']}_{kwargs['tumor_name']} \
 
     purple_plot_dir = pathlib.Path(kwargs['purple_dir']) / 'plot'
-
-    #virusbreakend_dir = pathlib.Path(kwargs['virusbreakend_dir'])
-    #virusbreakend_tsv = virusbreakend_dir / f'{batch_name}.virusbreakend.vcf.summary.tsv'
-    #virusbreakend_vcf = virusbreakend_dir / f'{batch_name}.virusbreakend.vcf'
 
     output_dir = pathlib.Path(kwargs['output_dir'])
     output_image_dir = output_dir / 'img'
@@ -63,8 +54,6 @@ def entry(ctx, **kwargs):
             --batch_name {batch_name} \
             --tumor_name {kwargs['tumor_name']} \
             \
-            --img_dir {output_image_dir}/ \
-            \
             --af_global {kwargs['af_global_fp']} \
             --af_keygenes {kwargs['af_keygenes_fp']} \
             \
@@ -74,17 +63,18 @@ def entry(ctx, **kwargs):
             --somatic_sv_vcf {kwargs['sv_somatic_vcf_fp']} \
             --purple_som_cnv_ann {kwargs['cnv_somatic_tsv_fp']} \
             \
-            --purple_som_gene_cnv {kwargs['purple_dir']}/MDX210176.purple.cnv.gene.tsv \
-            --purple_som_cnv {kwargs['purple_dir']}/MDX210176.purple.cnv.somatic.tsv \
-            --purple_purity {kwargs['purple_dir']}/MDX210176.purple.purity.tsv \
-            --purple_qc {kwargs['purple_dir']}/MDX210176.purple.qc \
-            --purple_som_snv_vcf {kwargs['purple_dir']}/MDX210176.purple.somatic.vcf.gz \
+            --purple_som_gene_cnv {kwargs['purple_dir']}/{kwargs['tumor_name']}.purple.cnv.gene.tsv \
+            --purple_som_cnv {kwargs['purple_dir']}/{kwargs['tumor_name']}.purple.cnv.somatic.tsv \
+            --purple_purity {kwargs['purple_dir']}/{kwargs['tumor_name']}.purple.purity.tsv \
+            --purple_qc {kwargs['purple_dir']}/{kwargs['tumor_name']}.purple.qc \
+            --purple_som_snv_vcf {kwargs['purple_dir']}/{kwargs['tumor_name']}.purple.somatic.vcf.gz \
             \
             --virusbreakend_tsv {kwargs['virusbreakend_dir']}/{batch_name}.virusbreakend.vcf.summary.tsv \
             --virusbreakend_vcf {kwargs['virusbreakend_dir']}/{batch_name}.virusbreakend.vcf \
             \
             --key_genes {kwargs['cancer_genes_fp']} \
             \
+            --img_dir {output_image_dir}/ \
             --result_outdir {output_table_dir}/ \
             --out_file {output_dir}/report.html
     '''
