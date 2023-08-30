@@ -1,0 +1,16 @@
+name: bolt
+
+channels:
+  - bioconda
+  - conda-forge
+  - bioconda
+  - defaults
+
+dependencies:
+  - bcftools >=1.15
+  - biopython
+  - cyvcf2 >=0.30.16
+  - pybedtools
+  - python >=3.10
+  - pyyaml
+  - vcfanno >=0.3.3
