@@ -159,6 +159,11 @@ def set_filter_data(record, tumor_index):
     # NOTE(SW): effectively reverts any FILTERs that may have been applied above
     if record.INFO.get(constants.VcfInfo.SAGE_HOTSPOT.value):
         info_rescue.append(constants.VcfInfo.SAGE_HOTSPOT)
+        # Remove INFO tag here for consistenct rescue processing below
+        # NOTE(SW): cyvcf2 doesn't appear to be able to delete an INFO entry that has no value, so
+        # we must set some value prior to deletion
+        record.INFO[constants.VcfInfo.SAGE_HOTSPOT.value] = 'deletion_placeholder'
+        del record.INFO[constants.VcfInfo.SAGE_HOTSPOT.value]
 
     ##
     # Clinical potential rescue; hotspot, driver, otherwise known
