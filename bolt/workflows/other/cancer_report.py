@@ -37,12 +37,20 @@ def entry(ctx, **kwargs):
 
     purple_plot_dir = pathlib.Path(kwargs['purple_dir']) / 'plot'
 
+    decomposed_snv_vcf = kwargs['smlv_somatic_vcf_fp'].replace('.vcf.gz', '.decomposed.vcf.gz')
+
     output_dir = pathlib.Path(kwargs['output_dir'])
     output_image_dir = output_dir / 'img'
     output_table_dir = output_dir / 'cancer_report_tables'
 
     command = fr'''
         mkdir -p {output_image_dir}/;
+
+        bcftools norm \
+            --atomize \
+            --remove-duplicates \
+            --output {decomposed_snv_vcf} \
+            {kwargs['smlv_somatic_vcf_fp']}
 
         find -L \
             {purple_plot_dir} \
@@ -57,7 +65,7 @@ def entry(ctx, **kwargs):
             --af_global {kwargs['af_global_fp']} \
             --af_keygenes {kwargs['af_keygenes_fp']} \
             \
-            --somatic_snv_vcf {kwargs['smlv_somatic_vcf_fp']} \
+            --somatic_snv_vcf {decomposed_snv_vcf} \
             \
             --somatic_sv_tsv {kwargs['sv_somatic_tsv_fp']} \
             --somatic_sv_vcf {kwargs['sv_somatic_vcf_fp']} \
