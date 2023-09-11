@@ -1,3 +1,6 @@
+# NOTE(SW): somatic VCF is expected to be unfiltered to capture all germline leakage
+
+
 import pathlib
 
 
@@ -41,29 +44,26 @@ def select_pass(in_fp):
 
 def add_germline_leakage(germline_vcf, somatic_vcf, tumor_name, normal_name):
 
-    # NOTE(SW): in order to traceback, must keep INFO/GNOMAD_COMMON and INFO/PON_COUNT; obvious also need to
-    # include INFO/GERMLINE_LEAKAGE
+    # NOTE(SW): the QUAL value for somatic but not germline variants is empty. DRAGEN uses INFO/SQ
+    # in somatic variant records to indicate quality score, though this is scaled differently to
+    # germline variant QUAL scores and so is not subsituted. Hence, germline leakage variants have
+    # an empty QUAL field.
 
-    # NOTE(SW): we are purposefully including germline leakage variants that do not have a PASS,.
-    # filter since this is what is done in Umccrise. I want to review/discuss the rationale driving
-    # this aspect.
-
+    # Retain all DRAGEN INFO fields
     info_default = [
         'INFO/DP',
-        'INFO/END',
         'INFO/FractionInformativeReads',
         'INFO/MQ',
-        'INFO/MQRankSum',
-        'INFO/ReadPosRankSum',
-        'INFO/hotspot',
     ]
 
+    # These INFO fields are retained to enable traceback
     info_retain = [
         util.get_qualified_vcf_annotation(constants.VcfInfo.GERMLINE_LEAKAGE),
         util.get_qualified_vcf_annotation(constants.VcfInfo.PON_COUNT),
-        'INFO/gnomAD_AF',
+        util.get_qualified_vcf_annotation(constants.VcfInfo.GNOMAD_AF),
     ]
 
+    # Keep all but FORMAT/SQ
     format_default = [
         'FORMAT/AD',
         'FORMAT/AF',
@@ -72,23 +72,29 @@ def add_germline_leakage(germline_vcf, somatic_vcf, tumor_name, normal_name):
         'FORMAT/F2R1',
         'FORMAT/GT',
         'FORMAT/MB',
-        'FORMAT/PS',
         'FORMAT/SB',
-        'FORMAT/SQ',
     ]
 
+    exclude_str = ',^'.join([*info_default, *info_retain, *format_default])
     out_fp = f'{germline_vcf.replace(".vcf.gz", ".include_leakage.vcf.gz")}'
 
-    exclude_str = ',^'.join([*info_default, *info_retain, *format_default])
+    # Process germline leakage
+    # 1. select tumor call data
+    # 2. rename as normal sample
+    # 3. clear FILTERs
+    # 4. remote unwanted INFO and FORMAT fields
 
+    leakage_info_str = util.get_qualified_vcf_annotation(constants.VcfInfo.GERMLINE_LEAKAGE)
     command = fr'''
-        bcftools view -s {tumor_name} -i 'INFO/GERMLINE_LEAKAGE=1' {somatic_vcf} | \
+        bcftools view -s {tumor_name} -i '{leakage_info_str}=1' {somatic_vcf} | \
             sed '/^#CHROM/ s/{tumor_name}/{normal_name}/' | \
+            awk 'BEGIN {{ OFS="\t" }}; /^[^#]/ {{ $7 = "PASS"; print; next }}; {{ print }}' | \
             bcftools annotate -x "{exclude_str}" -o germline_leakage.vcf.gz;
         bcftools index -t germline_leakage.vcf.gz;
     '''
     util.execute_command(command)
 
+    # Combine prepared germline leakage with full normal calls
     command = fr'''
         bcftools concat \
             --allow-overlaps \
