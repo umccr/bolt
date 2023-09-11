@@ -82,7 +82,7 @@ def entry(ctx, **kwargs):
         pcgrr_conda=kwargs['pcgrr_conda'],
     )
 
-    pcgr.transfer_annotations(
+    pcgr.transfer_annotations_somatic(
         selection_data['selected'],
         kwargs['tumor_name'],
         pcgr_dir,

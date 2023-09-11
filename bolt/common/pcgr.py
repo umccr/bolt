@@ -1,5 +1,6 @@
 import csv
 import pathlib
+import re
 import shutil
 import tempfile
 
@@ -223,7 +224,7 @@ def run_germline(in_fp, panel_fp, pcgr_dir, threads=1, pcgr_conda=None, pcgrr_co
     return out_dir
 
 
-def transfer_annotations(src_fp, fn_prefix, pcgr_dir, filter_name):
+def transfer_annotations_somatic(src_fp, fn_prefix, pcgr_dir, filter_name):
     # Set destination INFO field names and source TSV fields
     info_field_map = {
         constants.VcfInfo.PCGR_MUTATION_HOTSPOT: 'MUTATION_HOTSPOT',
@@ -235,15 +236,8 @@ def transfer_annotations(src_fp, fn_prefix, pcgr_dir, filter_name):
     pcgr_tsv_fp = pathlib.Path(pcgr_dir) / 'nosampleset.pcgr_acmg.grch38.snvs_indels.tiers.tsv'
     pcgr_vcf_fp = pathlib.Path(pcgr_dir) / 'nosampleset.pcgr_acmg.grch38.vcf.gz'
 
-    # Ensure header descriptions from source INFO annotations match those defined here for the
-    # output file; force manual inspection where they do not match
-    pcgr_vcf_fh = cyvcf2.VCF(pcgr_vcf_fp)
-    for header_dst, header_src in info_field_map.items():
-        header_src_entry = pcgr_vcf_fh.get_header_type(header_src)
-        header_dst_entry = util.get_vcf_header_entry(header_dst)
-        # Remove leading and trailing quotes from source
-        header_src_description_unquoted = header_src_entry['Description'].strip('"')
-        assert  header_src_description_unquoted == header_dst_entry['Description']
+    # Enforce matching defined and source INFO annotations
+    check_annotation_headers(info_field_map, pcgr_vcf_fp)
 
     # Gather PCGR annotation data for records
     pcgr_data = collect_pcgr_annotation_data(pcgr_tsv_fp, pcgr_vcf_fp, info_field_map)
@@ -264,71 +258,94 @@ def transfer_annotations(src_fp, fn_prefix, pcgr_dir, filter_name):
 
     # Transfer annotations and write to output
     for record in src_fh:
-
-
         # Do not process chrM since *snvs_indels.tiers.tsv does not include these annotations
         if record.CHROM == 'chrM':
             continue
-
         # Immediately print out variants that were not annotated
         if filter_name in record.FILTERS:
             out_fh.write_record(record)
             continue
+        # Annotate and write
+        record_ann = annotate_record(record, pcgr_data)
+        out_fh.write_record(record_ann)
 
-        # Get lookup key
-        assert len(record.ALT) == 1
-        [alt] = record.ALT
-        key = (record.CHROM, record.POS, record.REF, alt)
-        # Annotate then write
-        assert key in pcgr_data
-        for info_enum, v in pcgr_data[key].items():
-            record.INFO[info_enum.value] = v
-        out_fh.write_record(record)
+
+def transfer_annotations_germline(src_fp, sample_name, cpsr_dir):
+    # Set destination INFO field names and source TSV fields
+    info_field_map = {
+        constants.VcfInfo.CPSR_FINAL_CLASSIFICATION: 'FINAL_CLASSIFICATION',
+        constants.VcfInfo.CPSR_PATHOGENICITY_SCORE: 'CPSR_PATHOGENICITY_SCORE',
+        constants.VcfInfo.CPSR_CLINVAR_CLASSIFICATION: 'CLINVAR_CLASSIFICATION',
+        constants.VcfInfo.CPSR_CSQ: 'CSQ',
+    }
+
+    cpsr_tsv_fp = pathlib.Path(cpsr_dir) / f'{sample_name}.cpsr.grch38.snvs_indels.tiers.tsv'
+    cpsr_vcf_fp = pathlib.Path(cpsr_dir) / f'{sample_name}.cpsr.grch38.vcf.gz'
+
+    # Enforce matching defined and source INFO annotations
+    check_annotation_headers(info_field_map, cpsr_vcf_fp)
+
+    # Gather CPSR annotation data for records
+    cpsr_data = collect_cpsr_annotation_data(cpsr_tsv_fp, cpsr_vcf_fp, info_field_map)
+
+    # Open filehandles, set required header entries
+    src_fh = cyvcf2.VCF(src_fp)
+
+    util.add_vcf_header_entry(src_fh, constants.VcfInfo.CPSR_FINAL_CLASSIFICATION)
+    util.add_vcf_header_entry(src_fh, constants.VcfInfo.CPSR_PATHOGENICITY_SCORE)
+    util.add_vcf_header_entry(src_fh, constants.VcfInfo.CPSR_CLINVAR_CLASSIFICATION)
+    util.add_vcf_header_entry(src_fh, constants.VcfInfo.CPSR_CSQ)
+
+    out_fp = f'{sample_name}.annotations.vcf.gz'
+    out_fh = cyvcf2.Writer(out_fp, src_fh, 'wz')
+
+    # Transfer annotations and write to output
+    for record in src_fh:
+        # Do not process chrM since *snvs_indels.tiers.tsv does not include these annotations
+        if record.CHROM == 'chrM':
+            continue
+        # Annotate and write
+        # NOTE(SW): allow missing CPSR annotations for input variants, CPSR seems to drop some
+        record_ann = annotate_record(record, cpsr_data, allow_missing=True)
+        out_fh.write_record(record_ann)
+
+
+def check_annotation_headers(info_field_map, vcf_fp):
+    # Ensure header descriptions from source INFO annotations match those defined here for the
+    # output file; force manual inspection where they do not match
+    vcf_fh = cyvcf2.VCF(vcf_fp)
+    for header_dst, header_src in info_field_map.items():
+
+        # Skip header lines that do not have an equivalent entry in the PCGR/CPSR VCF
+        try:
+            header_src_entry = vcf_fh.get_header_type(header_src)
+        except KeyError:
+            continue
+
+        header_dst_entry = util.get_vcf_header_entry(header_dst)
+        # Remove leading and trailing quotes from source
+        header_src_description_unquoted = header_src_entry['Description'].strip('"')
+        assert  header_src_description_unquoted == header_dst_entry['Description']
 
 
 def collect_pcgr_annotation_data(tsv_fp, vcf_fp, info_field_map):
-    # First get all CSQ from VCF (not available in the TSV)
-    data_csq = dict()
-    for record in cyvcf2.VCF(vcf_fp):
-        # Set lookup key; PCGR strips leading 'chr' from contig names
-        assert len(record.ALT) == 1
-        [alt] = record.ALT
-        key = (f'chr{record.CHROM}', record.POS, record.REF, alt)
-        assert key not in data_csq
-        data_csq[key] = record.INFO.get('CSQ')
-
-    # Gather all annotations
-    data = dict()
+    # Gather all annotations from TSV
+    data_tsv = dict()
     with open(tsv_fp, 'r') as tsv_fh:
         for record in csv.DictReader(tsv_fh, delimiter='\t'):
-            # Set lookup key; PCGR strips leading 'chr' from contig names
-            chrom = f'chr{record["CHROM"]}'
-            pos = int(record['POS'])
-            key = (chrom, pos, record['REF'], record['ALT'])
-            assert key not in data
-
-            # Process INFO annotations that can be directly transferred for the current record
-            data_rec = dict()
-            for info_dst, info_src in info_field_map.items():
-                if info_src == 'CSQ':
-                    info_val = data_csq[key]
-                else:
-                    info_val = record[info_src]
-
-                if info_val == 'NA':
-                    continue
-                data_rec[info_dst] = info_val
+            key, record_ann = get_annotation_entry_tsv(record, info_field_map)
+            assert key not in data_tsv
 
             # Process PCGR_TIER
             # TIER_1, TIER_2, TIER_3, TIER_4, NONCODING
-            data_rec[constants.VcfInfo.PCGR_TIER] = record['TIER'].replace(' ', '_')
+            record_ann[constants.VcfInfo.PCGR_TIER] = record['TIER'].replace(' ', '_')
 
             # Count COSMIC hits
             if record['COSMIC_MUTATION_ID'] == 'NA':
                 cosmic_count = 0
             else:
                 cosmic_count = len(record['COSMIC_MUTATION_ID'].split('&'))
-            data_rec[constants.VcfInfo.PCGR_COSMIC_COUNT] = cosmic_count
+            record_ann[constants.VcfInfo.PCGR_COSMIC_COUNT] = cosmic_count
 
             # Count ICGC-PCAWG hits by taking sum of affected donors where the annotation value has
             # the following format: project_code|tumor_type|affected_donors|tested_donors|frequency
@@ -339,9 +356,112 @@ def collect_pcgr_annotation_data(tsv_fp, vcf_fp, info_field_map):
                     affected_donors = int(pcawrg_hit_data_fields[2])
                     icgc_pcawg_count += affected_donors
                 assert icgc_pcawg_count > 0
-            data_rec[constants.VcfInfo.PCGR_ICGC_PCAWG_COUNT] = icgc_pcawg_count
+            record_ann[constants.VcfInfo.PCGR_ICGC_PCAWG_COUNT] = icgc_pcawg_count
 
-            # Store annotation data for the record
-            data[key] = data_rec
+            # Store annotation data
+            data_tsv[key] = record_ann
 
-    return data
+    # Gather data from VCF
+    data_vcf = get_annotations_vcf(vcf_fp, info_field_map)
+
+    # Compile annotations, prefering TSV source
+    return compile_annotation_data(data_tsv, data_vcf)
+
+
+def collect_cpsr_annotation_data(tsv_fp, vcf_fp, info_field_map):
+    # Gather annotations from TSV
+    data_tsv = dict()
+    gdot_re = re.compile('^(?P<chrom>[\dXYM]+):g\.(?P<pos>\d+)(?P<ref>[A-Z]+)>(?P<alt>[A-Z]+)$')
+    with open(tsv_fp, 'r') as tsv_fh:
+        for record in csv.DictReader(tsv_fh, delimiter='\t'):
+            # Decompose CPSR 'GENOMIC_CHANGE' field into CHROM, POS, REF, and ALT
+            re_result = gdot_re.match(record['GENOMIC_CHANGE'])
+            if not re_result:
+                print(record['GENOMIC_CHANGE'])
+                assert re_result
+            record['CHROM'] = re_result.group('chrom')
+            record['POS'] = re_result.group('pos')
+            record['REF'] = re_result.group('ref')
+            record['ALT'] = re_result.group('alt')
+
+            key, record_ann = get_annotation_entry_tsv(record, info_field_map)
+            assert key not in data_tsv
+            data_tsv[key] = record_ann
+
+    # Gather annotations from VCF
+    data_vcf = get_annotations_vcf(vcf_fp, info_field_map)
+
+    # Compile annotations, prefering TSV source
+    return compile_annotation_data(data_tsv, data_vcf)
+
+
+def get_annotations_vcf(vcf_fp, info_field_map):
+    data_vcf = dict()
+    for record in cyvcf2.VCF(vcf_fp):
+        # Set lookup key; PCGR strips leading 'chr' from contig names
+        assert len(record.ALT) == 1
+        [alt] = record.ALT
+        key = (f'chr{record.CHROM}', record.POS, record.REF, alt)
+        assert key not in data_vcf
+
+        data_vcf[key] = dict()
+        for info_dst, info_src in info_field_map.items():
+            if (info_val := record.INFO.get(info_src)):
+                data_vcf[key][info_dst] = info_val
+
+    return data_vcf
+
+
+def get_annotation_entry_tsv(record, info_field_map):
+    # Set lookup key; PCGR/CPSR strips leading 'chr' from contig names
+    chrom = f'chr{record["CHROM"]}'
+    pos = int(record['POS'])
+    key = (chrom, pos, record['REF'], record['ALT'])
+
+    record_ann = dict()
+    for info_dst, info_src in info_field_map.items():
+        if not (info_val := record.get(info_src)):
+            continue
+        elif info_val == 'NA':
+            continue
+
+        record_ann[info_dst] = info_val
+
+    return key, record_ann
+
+
+def compile_annotation_data(data_tsv, data_vcf):
+    # Compile annotations, prefering TSV as source
+    annotations = data_tsv
+    for key, data_vcf_record in data_vcf.items():
+
+        if key not in annotations:
+            annotations[key] = dict()
+
+        for info_name, info_val in data_vcf_record.items():
+
+            if info_name in annotations[key]:
+                continue
+
+            annotations[key][info_name] = info_val
+    return annotations
+
+
+def annotate_record(record, annotations, *, allow_missing=False):
+    # Get lookup key
+    assert len(record.ALT) == 1
+    [alt] = record.ALT
+    key = (record.CHROM, record.POS, record.REF, alt)
+
+    # Handle missing entries
+    if key not in annotations:
+        if allow_missing:
+            return record
+        else:
+            assert key not in annotations
+
+    # Transfer annotations
+    for info_enum, v in annotations[key].items():
+        record.INFO[info_enum.value] = v
+
+    return record

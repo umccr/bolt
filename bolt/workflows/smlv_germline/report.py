@@ -49,13 +49,15 @@ def entry(ctx, **kwargs):
 
 
     # CPSR report
+    vcf_norm_fp = split_multiallelic_records(kwargs['vcf_fp'])
+
     cpsr_prep_fp = pcgr.prepare_vcf_germline(
-        kwargs['vcf_fp'],
+        vcf_norm_fp,
         f'{kwargs["normal_name"]}.germline',
         kwargs['normal_name'],
     )
 
-    pcgr.run_germline(
+    cpsr_dir = pcgr.run_germline(
         cpsr_prep_fp,
         kwargs['germline_panel_list_fp'],
         kwargs['pcgr_data_dir'],
@@ -63,6 +65,12 @@ def entry(ctx, **kwargs):
         pcgr_conda=kwargs['pcgr_conda'],
         pcgrr_conda=kwargs['pcgrr_conda'],
         sample_id=kwargs['normal_name'],
+    )
+
+    pcgr.transfer_annotations_germline(
+        vcf_norm_fp,
+        kwargs['normal_name'],
+        cpsr_dir,
     )
 
 
@@ -77,3 +85,12 @@ def run_bcftool_stats(vcf_fp, normal_name):
 def count_variants(fp):
     process = util.execute_command(f'bcftools view -H -f PASS,. {fp} | wc -l')
     return process.stdout.strip()
+
+
+def split_multiallelic_records(fp):
+    fp_out = fp.replace('.vcf.gz', '.norm.vcf.gz')
+    command = fr'''
+        bcftools norm -m - -o {fp_out} {fp}
+    '''
+    util.execute_command(command)
+    return fp_out
