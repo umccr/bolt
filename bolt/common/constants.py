@@ -277,6 +277,11 @@ VCF_HEADER_ENTRIES = {
         'Description': 'Count of ICGC PCAWG hits',
     },
 
+    VcfInfo.SAGE_HOTSPOT_RESCUE: {
+        'Number': '0',
+        'Type': 'Flag',
+        'Description': '',
+    },
     VcfInfo.PCGR_TIER_RESCUE: {
         'Number': '0',
         'Type': 'Flag',
