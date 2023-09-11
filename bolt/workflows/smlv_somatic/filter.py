@@ -28,6 +28,7 @@ def entry(ctx, **kwargs):
         constants.VcfFilter.PON,
         constants.VcfFilter.ENCODE,
         constants.VcfFilter.GNOMAD_COMMON,
+        constants.VcfInfo.SAGE_HOTSPOT_RESCUE,
         constants.VcfInfo.PCGR_TIER_RESCUE,
         constants.VcfInfo.CLINICAL_POTENTIAL_RESCUE,
         constants.VcfInfo.GERMLINE_LEAKAGE,
@@ -153,17 +154,12 @@ def set_filter_data(record, tumor_index):
     if pcgr_tier in constants.PCGR_TIERS_RESCUE:
         info_rescue.append(constants.VcfInfo.PCGR_TIER_RESCUE)
 
-    ###
+    ##
     # SAGE hotspot rescue
-    ###
+    ##
     # NOTE(SW): effectively reverts any FILTERs that may have been applied above
     if record.INFO.get(constants.VcfInfo.SAGE_HOTSPOT.value):
-        info_rescue.append(constants.VcfInfo.SAGE_HOTSPOT)
-        # Remove INFO tag here for consistenct rescue processing below
-        # NOTE(SW): cyvcf2 doesn't appear to be able to delete an INFO entry that has no value, so
-        # we must set some value prior to deletion
-        record.INFO[constants.VcfInfo.SAGE_HOTSPOT.value] = 'deletion_placeholder'
-        del record.INFO[constants.VcfInfo.SAGE_HOTSPOT.value]
+        info_rescue.append(constants.VcfInfo.SAGE_HOTSPOT_RESCUE)
 
     ##
     # Clinical potential rescue; hotspot, driver, otherwise known
