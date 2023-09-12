@@ -128,7 +128,7 @@ def bcftools_stats_prepare(in_fp, tumor_name):
         # FORMAT/SQ
         if (tumor_sq_value := record.format('SQ')) is not None:
             record.QUAL = tumor_sq_value[tumor_index,0]
-        elif record.INFO.get('SAGE_NOVEL'):
+        elif record.INFO.get('SAGE_NOVEL') is not None:
             record.QUAL = None
         else:
             assert False

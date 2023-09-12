@@ -99,10 +99,10 @@ def set_filter_data(record, tumor_index):
 
     if tumor_ad < constants.MIN_AD_DIFFICULT_REGIONS:
 
-        if any(record.INFO.get(e) for e in difficult_region_tags):
+        if any(record.INFO.get(e) is not None for e in difficult_region_tags):
             filters.append(constants.VcfFilter.MIN_AD_DIFFICULT)
 
-        if not record.INFO.get(constants.VcfInfo.GIAB_CONF.value):
+        if record.INFO.get(constants.VcfInfo.GIAB_CONF.value) is None:
             filters.append(constants.VcfFilter.MIN_AD_NON_GIAB)
 
     # NOTE(SW): filter_somatic_vcf from umccr/vcf_stuff includes a mappability filter but the INFO
@@ -119,7 +119,7 @@ def set_filter_data(record, tumor_index):
     ##
     # ENCODE blocklist filter
     ##
-    if record.INFO.get(constants.VcfInfo.ENCODE.value):
+    if record.INFO.get(constants.VcfInfo.ENCODE.value) is not None:
         filters.append(constants.VcfFilter.ENCODE)
 
     ##
@@ -158,7 +158,7 @@ def set_filter_data(record, tumor_index):
     # SAGE hotspot rescue
     ##
     # NOTE(SW): effectively reverts any FILTERs that may have been applied above
-    if record.INFO.get(constants.VcfInfo.SAGE_HOTSPOT.value):
+    if record.INFO.get(constants.VcfInfo.SAGE_HOTSPOT.value) is not None:
         info_rescue.append(constants.VcfInfo.SAGE_HOTSPOT_RESCUE)
 
     ##
@@ -176,8 +176,8 @@ def set_filter_data(record, tumor_index):
     tcga_pancancer_count = record.INFO.get(constants.VcfInfo.PCGR_TCGA_PANCANCER_COUNT.value, 0)
     icgc_pcawg_count = record.INFO.get(constants.VcfInfo.PCGR_ICGC_PCAWG_COUNT.value, 0)
     if (
-        record.INFO.get(constants.VcfInfo.HOTSPOT.value) or
-        record.INFO.get(constants.VcfInfo.PCGR_MUTATION_HOTSPOT.value) or
+        record.INFO.get(constants.VcfInfo.HOTSPOT.value) is not None or
+        record.INFO.get(constants.VcfInfo.PCGR_MUTATION_HOTSPOT.value) is not None or
         any(e in clinvar_clinsigs for e in constants.CLINVAR_CLINSIGS_RESCUE) or
         cosmic_count >= constants.MIN_COSMIC_COUNT_RESCUE or
         tcga_pancancer_count >= constants.MIN_TCGA_PANCANCER_COUNT_RESCUE or
@@ -199,7 +199,7 @@ def set_filter_data(record, tumor_index):
         filters = list()
         # Set rescue info
         for info_enum in info_rescue:
-            assert not record.INFO.get(info_enum.value)
+            assert record.INFO.get(info_enum.value) is None
             record.INFO[info_enum.value] = True
 
 

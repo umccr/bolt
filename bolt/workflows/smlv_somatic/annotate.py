@@ -191,11 +191,11 @@ def exclude_nonpass(in_fp, fn_prefix):
 
     def process_fn(record, selected_fh, filtered_fh):
         # NOTES(SW): sanity check to ensure that if INFO/SAGE_HOTSPOT is present that FILTER=PASS
-        if record.INFO.get('SAGE_HOTSPOT'):
+        if record.INFO.get('SAGE_HOTSPOT') is not None:
             assert not record.FILTER
         # Write to filtered_fp if passes criteria: in a hotspot or FILTER=PASS
         # Otherwise update FILTER appropriately then write to selected_fp
-        if record.INFO.get(constants.VcfInfo.HOTSPOT.value) or not record.FILTER:
+        if record.INFO.get(constants.VcfInfo.HOTSPOT.value) is not None or not record.FILTER:
             filtered_fh.write_record(record)
         else:
             assert 'PASS' not in record.FILTERS
@@ -217,7 +217,7 @@ def exclude_population_variants(in_fp, fn_prefix):
         is_population_common = float(gnomad_af) >= constants.MAX_SOMATIC_VARIANTS_GNOMAD_FILTER
         # Write to filtered_fp if passes criteria: in a hotspot or not a common population variant
         # Otherwise update FILTER appropriately then write to selected_fp
-        if record.INFO.get(constants.VcfInfo.HOTSPOT.value) or not is_population_common:
+        if record.INFO.get(constants.VcfInfo.HOTSPOT.value) is not None or not is_population_common:
             filtered_fh.write_record(record)
         else:
             existing_filters = [e for e in record.FILTERS if e != 'PASS']
@@ -238,7 +238,7 @@ def exclude_non_cancer_genes(in_fp, fn_prefix, bed_fp):
         # Write to filtered_fp if passes criteria: in a hotspot or associated with a cancer gene
         # Otherwise update FILTER appropriately then write to selected_fp
         key = (record.CHROM, record.POS, record.REF, tuple(record.ALT))
-        if record.INFO.get(constants.VcfInfo.HOTSPOT.value) or key in gene_variants:
+        if record.INFO.get(constants.VcfInfo.HOTSPOT.value) is not None or key in gene_variants:
             filtered_fh.write_record(record)
         else:
             existing_filters = [e for e in record.FILTERS if e != 'PASS']
