@@ -31,9 +31,10 @@ MIN_ICGC_PCAWG_HITS_RESCUE = 5
 MIN_TCGA_PANCANCER_COUNT_RESCUE = 5
 MIN_ICGC_PCAWG_COUNT_RESCUE = 5
 CLINVAR_CLINSIGS_RESCUE = {
-    'pathogenic',
     'conflicting_interpretations_of_pathogenicity',
-    'uncertain',
+    'likely_pathogenic',
+    'pathogenic',
+    'uncertain_significance',
 }
 PCGR_TIERS_RESCUE = {
     'TIER_1',
