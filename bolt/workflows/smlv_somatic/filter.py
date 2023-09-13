@@ -130,7 +130,12 @@ def set_filter_data(record, tumor_index):
     # FILTER/gnomAD_common are considered germline. I'd like to apply this filter to all variants
     # then check during germline leakage whether FILTER/gnomAD_common is the only FILTER set to
     # improve coherence of processing logic.
-    if not record.FILTER and record.INFO.get(constants.VcfInfo.GNOMAD_AF.value, 0) >= constants.MAX_GNOMAD_AF:
+
+    # NOTE(SW): rounding is essential here for accurate comparison; cyvcf2 floating-point error
+    # means INFO/gnomAD_AF=0.01 can be represented as 0.009999999776482582
+
+    gnomad_af = round(record.INFO.get(constants.VcfInfo.GNOMAD_AF.value, 0), 3)
+    if not record.FILTER and gnomad_af >= constants.MAX_GNOMAD_AF:
         filters.append(constants.VcfFilter.GNOMAD_COMMON)
 
 
