@@ -79,25 +79,25 @@ class TestSmlvSomaticFilter(unittest.TestCase):
 
     def setUp(self):
         self.records = {
-            'pass_af10':               {'format_data': {'GT': '0/1', 'AD': '54,6',  'AF': '0.100'}},
-            'pass_af20':               {'format_data': {'GT': '0/1', 'AD': '48,12', 'AF': '0.200'}},
-            'filter_min_af':           {'format_data': {'GT': '0/1', 'AD': '91,10', 'AF': '0.099'}},
-            'filter_min_ad':           {'format_data': {'GT': '0/1', 'AD': '27,3',  'AF': '0.100'}},
-            'filter_min_ad_difficult': {'format_data': {'GT': '0/1', 'AD': '55,5',  'AF': '0.100'}},
+            'pass_af10':        {'format_data': {'GT': '0/1', 'AD': '54,6',  'AF': '0.100'}},
+            'pass_af20':        {'format_data': {'GT': '0/1', 'AD': '48,12', 'AF': '0.200'}},
+            'filter_min_af9.9': {'format_data': {'GT': '0/1', 'AD': '91,10', 'AF': '0.099'}},
+            'filter_min_ad3':   {'format_data': {'GT': '0/1', 'AD': '27,3',  'AF': '0.100'}},
+            'filter_min_ad5':   {'format_data': {'GT': '0/1', 'AD': '45,5',  'AF': '0.100'}},
         }
 
 
 
 
     def test_min_af_filter(self):
-        record = get_record(**self.records['filter_min_af'])
+        record = get_record(**self.records['filter_min_af9.9'])
         smlv_somatic_filter.set_filter_data(record, 0)
         assert record.FILTERS == [bolt_constants.VcfFilter.MIN_AF.value]
 
 
     def test_min_ad_filter(self):
         record = get_record(
-            **self.records['filter_min_ad'],
+            **self.records['filter_min_ad3'],
             info_data={'GIAB_CONF': ''},
         )
         smlv_somatic_filter.set_filter_data(record, 0)
@@ -106,7 +106,7 @@ class TestSmlvSomaticFilter(unittest.TestCase):
 
     def test_min_ad_difficult_filter(self):
         record = get_record(
-            **self.records['filter_min_ad_difficult'],
+            **self.records['filter_min_ad5'],
             info_data={'SEGDUP': '', 'GIAB_CONF': ''},
         )
         smlv_somatic_filter.set_filter_data(record, 0)
@@ -116,7 +116,7 @@ class TestSmlvSomaticFilter(unittest.TestCase):
 
     def test_min_ad_difficult_filter_with_non_giab_conf(self):
         record = get_record(
-            **self.records['filter_min_ad'],
+            **self.records['filter_min_ad3'],
             info_data={'SEGDUP': ''},
         )
         smlv_somatic_filter.set_filter_data(record, 0)
@@ -170,7 +170,7 @@ class TestSmlvSomaticFilter(unittest.TestCase):
 
         for pcgr_tier in pcgr_tiers:
             record = get_record(
-                **self.records['filter_min_af'],
+                **self.records['filter_min_af9.9'],
                 info_data={'PCGR_TIER': pcgr_tier},
             )
             smlv_somatic_filter.set_filter_data(record, 0)
@@ -180,7 +180,7 @@ class TestSmlvSomaticFilter(unittest.TestCase):
 
     def test_sage_hotspot_rescue(self):
         record = get_record(
-            **self.records['filter_min_af'],
+            **self.records['filter_min_af9.9'],
             info_data={'SAGE_HOTSPOT': ''},
         )
         smlv_somatic_filter.set_filter_data(record, 0)
@@ -200,7 +200,7 @@ class TestSmlvSomaticFilter(unittest.TestCase):
 
         for info_data_set in info_data_sets:
             record = get_record(
-                **self.records['filter_min_af'],
+                **self.records['filter_min_af9.9'],
                 info_data=info_data_set,
             )
             smlv_somatic_filter.set_filter_data(record, 0)
@@ -219,7 +219,7 @@ class TestSmlvSomaticFilter(unittest.TestCase):
 
         for clinsig in clinsigs:
             record = get_record(
-                **self.records['filter_min_af'],
+                **self.records['filter_min_af9.9'],
                 info_data={'PCGR_CLINVAR_CLNSIG': clinsig},
             )
             smlv_somatic_filter.set_filter_data(record, 0)
