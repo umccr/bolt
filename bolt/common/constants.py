@@ -61,6 +61,7 @@ class VcfFilter(enum.Enum):
     ENCODE = 'ENCODE'
     GNOMAD_COMMON = 'gnomAD_common'
 
+
     @property
     def namespace(self):
         return 'FILTER'
