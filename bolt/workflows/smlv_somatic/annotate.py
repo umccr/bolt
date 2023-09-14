@@ -113,7 +113,7 @@ def general_annotations(in_fp, fn_prefix, threads, annotations_dir):
     toml_fp = pathlib.Path(annotations_dir) / 'vcfanno_annotations.toml'
     out_fp = f'{fn_prefix}.general.vcf.gz'
     command = fr'''
-        vcfanno -p {threads} {toml_fp} {in_fp} | bcftools view -o {out_fp} && \
+        vcfanno -p {threads} -base-path $(pwd) {toml_fp} {in_fp} | bcftools view -o {out_fp} && \
             bcftools index -t {out_fp}
     '''
     util.execute_command(command)
@@ -129,8 +129,8 @@ def panel_of_normal_annotations(in_fp, fn_prefix, threads, pon_dir):
     threads_quot, threads_rem = divmod(threads, 2)
 
     command = fr'''
-        vcfanno -p {threads_quot+threads_rem} {toml_snp_fp} {in_fp} | \
-            vcfanno -permissive-overlap -p {threads_quot} {toml_indel_fp} /dev/stdin | \
+        vcfanno -p {threads_quot+threads_rem} -base-path $(pwd) {toml_snp_fp} {in_fp} | \
+            vcfanno -permissive-overlap -p {threads_quot} -base-path $(pwd) {toml_indel_fp} /dev/stdin | \
             bcftools view -o {out_fp} && \
             bcftools index -t {out_fp}
     '''

@@ -1,6 +1,7 @@
 name: bolt
 
 channels:
+  - umccr
   - bioconda
   - conda-forge
   - bioconda
@@ -13,4 +14,4 @@ dependencies:
   - pybedtools
   - python >=3.10
   - pyyaml
-  - vcfanno >=0.3.3
+  - vcfanno ==0.3.5
