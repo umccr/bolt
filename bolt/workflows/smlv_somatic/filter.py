@@ -42,6 +42,7 @@ def entry(ctx, **kwargs):
         constants.VcfInfo.SAGE_HOTSPOT_RESCUE,
         constants.VcfInfo.PCGR_TIER_RESCUE,
         constants.VcfInfo.CLINICAL_POTENTIAL_RESCUE,
+        constants.VcfInfo.GERMLINE_LEAKAGE,
         constants.VcfInfo.RESCUED_FILTERS_EXISTING,
         constants.VcfInfo.RESCUED_FILTERS_PENDING,
     )
@@ -221,6 +222,38 @@ def set_filter_data(record, tumor_index):
         # Clear filters
         record.FILTER = 'PASS'
         filters = list()
+
+
+    ######################
+    ## Germline leakage ##
+    ######################
+    # Annotate variants thought to be germline leakage. Rescued variants are never treated as
+    # germline leakage.
+
+    # NOTE(SW): in Umccrise, where variants have set FILTER=PoN they are then immediately checked
+    # if they are considered germline leakage but always fail the initial check for an empty
+    # FILTER; germline leakage obtained via the gnomAD_AF filter is not affected by this issue
+
+    # Germline leakage conditions
+
+    # NOTE(SW): when implementing new conditions take care to include relevant filters in the below
+    # conditional statement
+
+    # Require that there are no upstream or non-allowable pending filters
+    allowable_filters_gl = {constants.VcfFilter.PON, constants.VcfFilter.GNOMAD_COMMON}
+    filters_pending_gl = set(filters) - allowable_filters_gl
+    filters_gl = record.FILTER or filters_pending_gl
+
+    # Conditions
+    pon_gl = constants.VcfFilter.PON in filters and tumor_af >= constants.MIN_PON_GERMLINE_AF
+    gnomad_gl = constants.VcfFilter.GNOMAD_COMMON in filters
+
+    # Annotate variants where they:
+    # 1. have not been rescued (not currently possible with leakage conditions relying on filters)
+    # 2. have no upstream or non-allowable pending filters
+    # 3. meet at least one germline leakage condition
+    if not rescued_variant and not filters_gl and (pon_gl or gnomad_gl):
+        record.INFO[constants.VcfInfo.GERMLINE_LEAKAGE.value] = True
 
 
     #######################
