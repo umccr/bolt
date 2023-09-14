@@ -123,6 +123,9 @@ class VcfInfo(enum.Enum):
 
     ANN = 'ANN'
 
+    RESCUED_FILTERS_EXISTING = 'RESCUED_FILTERS_EXISTING'
+    RESCUED_FILTERS_PENDING = 'RESCUED_FILTERS_PENDING'
+
 
     @property
     def namespace(self):
@@ -347,6 +350,18 @@ VCF_HEADER_ENTRIES = {
             'cDNA.pos / cDNA.length | CDS.pos / CDS.length | AA.pos / AA.length | Distance | '
             'ERRORS / WARNINGS / INFO\''
         ),
+    },
+
+    VcfInfo.RESCUED_FILTERS_EXISTING: {
+        'Number': '1',
+        'Type': 'String',
+        'Description': 'Filters existing prior to variant rescue',
+    },
+
+    VcfInfo.RESCUED_FILTERS_PENDING: {
+        'Number': '1',
+        'Type': 'String',
+        'Description': 'Filters pending prior to variant rescue',
     },
 
 

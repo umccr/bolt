@@ -259,3 +259,39 @@ class TestSmlvSomaticFilter(unittest.TestCase):
         smlv_somatic_filter.set_filter_data(record, 0)
         assert not record.FILTER
         assert record.INFO.get(bolt_constants.VcfInfo.SAGE_HOTSPOT_RESCUE.value) is None
+
+
+    def test_stored_rescue_filters__pending_filters(self):
+        filters_pending_expected = [
+            bolt_constants.VcfFilter.MIN_AD,
+            bolt_constants.VcfFilter.MIN_AD_NON_GIAB,
+        ]
+        filters_pending_expected_str = ','.join(sorted(f.value for f in filters_pending_expected))
+        rescued_filters_str = bolt_constants.VcfInfo.RESCUED_FILTERS_PENDING.value
+
+        for vfilter in ['.', 'PASS']:
+            record = get_record(
+                **self.records['filter_min_ad3'],
+                vfilter=vfilter,
+                info_data={'HOTSPOT': ''},
+            )
+            smlv_somatic_filter.set_filter_data(record, 0)
+
+            assert not record.FILTER
+            assert record.INFO.get(bolt_constants.VcfInfo.RESCUED_FILTERS_EXISTING.value) is None
+            assert record.INFO.get(rescued_filters_str) == filters_pending_expected_str
+
+
+    def test_stored_rescue_filters__existing_filter(self):
+        rescued_filters_str = bolt_constants.VcfInfo.RESCUED_FILTERS_EXISTING.value
+
+        record = get_record(
+            **self.records['pass_af10'],
+            vfilter='SEGDUP',
+            info_data={'HOTSPOT': ''},
+        )
+        smlv_somatic_filter.set_filter_data(record, 0)
+
+        assert not record.FILTER
+        assert record.INFO.get(bolt_constants.VcfInfo.RESCUED_FILTERS_PENDING.value) is None
+        assert record.INFO.get(rescued_filters_str) == 'SEGDUP'

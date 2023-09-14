@@ -32,6 +32,8 @@ def entry(ctx, **kwargs):
         constants.VcfInfo.PCGR_TIER_RESCUE,
         constants.VcfInfo.CLINICAL_POTENTIAL_RESCUE,
         constants.VcfInfo.GERMLINE_LEAKAGE,
+        constants.VcfInfo.RESCUED_FILTERS_EXISTING,
+        constants.VcfInfo.RESCUED_FILTERS_PENDING,
     )
     for header_enum in header_filters:
         util.add_vcf_header_entry(in_fh, header_enum)
@@ -199,13 +201,18 @@ def set_filter_data(record, tumor_index):
     rescue_candidate = filters or record.FILTER
     rescued_variant = bool(info_rescue)
     if rescue_candidate and rescued_variant:
-        # Clear existing filters
-        record.FILTER = 'PASS'
-        filters = list()
         # Set rescue info
         for info_enum in info_rescue:
             assert record.INFO.get(info_enum.value) is None
             record.INFO[info_enum.value] = True
+        # Add rescued filters
+        if record.FILTER:
+            record.INFO['RESCUED_FILTERS_EXISTING'] = record.FILTER.replace(';', ',')
+        if filters:
+            record.INFO['RESCUED_FILTERS_PENDING'] = ','.join(sorted(f.value for f in filters))
+        # Clear filters
+        record.FILTER = 'PASS'
+        filters = list()
 
 
     ######################
