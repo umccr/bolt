@@ -121,6 +121,7 @@ class VcfInfo(enum.Enum):
     RESCUED_FILTERS_EXISTING = 'RESCUED_FILTERS_EXISTING'
     RESCUED_FILTERS_PENDING = 'RESCUED_FILTERS_PENDING'
 
+
     @property
     def namespace(self):
         return 'INFO'

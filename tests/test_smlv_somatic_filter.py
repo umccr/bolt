@@ -249,7 +249,7 @@ class TestSmlvSomaticFilter(unittest.TestCase):
             record = get_record(
                 **self.records['filter_min_ad3'],
                 vfilter=vfilter,
-                info_data={'HMF_HOTSPOT': ''},
+                info_data={'HOTSPOT': ''},
             )
             smlv_somatic_filter.set_filter_data(record, 0)
 
@@ -263,11 +263,11 @@ class TestSmlvSomaticFilter(unittest.TestCase):
 
         record = get_record(
             **self.records['pass_af10'],
-            vfilter='DIFFICULT_segdup',
-            info_data={'HMF_HOTSPOT': ''},
+            vfilter='SEGDUP',
+            info_data={'HOTSPOT': ''},
         )
         smlv_somatic_filter.set_filter_data(record, 0)
 
         assert not record.FILTER
         assert record.INFO.get(bolt_constants.VcfInfo.RESCUED_FILTERS_PENDING.value) is None
-        assert record.INFO.get(rescued_filters_str) == 'DIFFICULT_segdup'
+        assert record.INFO.get(rescued_filters_str) == 'SEGDUP'
