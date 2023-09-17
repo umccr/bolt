@@ -1,8 +1,6 @@
 import csv
 import pathlib
 import re
-import shutil
-import tempfile
 
 
 import cyvcf2
@@ -110,11 +108,7 @@ def get_minimal_header(in_fh):
 
 def run_somatic(in_fp, pcgr_dir, threads=1, pcgr_conda=None, pcgrr_conda=None, purity=None, ploidy=None, sample_id=None):
 
-    # NOTE(SW): Nextflow FusionFS v0.6.5 does not support PCGR output to S3; instead write to a
-    # temporary directory outside of the FusionFS mounted directory then manually copy across
-
     out_dir = 'pcgr_output/'
-    tmp_dir = tempfile.TemporaryDirectory()
 
     if not sample_id:
         sample_id = 'nosampleset'
@@ -146,7 +140,7 @@ def run_somatic(in_fp, pcgr_dir, threads=1, pcgr_conda=None, pcgrr_conda=None, p
         command_args.append(f'--tumor_ploidy {ploidy}')
 
     # NOTE(SW): placed here to always have output directory last
-    command_args.append(f'--output_dir {tmp_dir.name}')
+    command_args.append(f'--output_dir {out_dir}')
 
     delimiter_padding = ' ' * 10
     delimiter = f' \\\n{delimiter_padding}'
@@ -165,8 +159,6 @@ def run_somatic(in_fp, pcgr_dir, threads=1, pcgr_conda=None, pcgrr_conda=None, p
 
     util.execute_command(command)
 
-    shutil.copytree(tmp_dir.name, out_dir)
-
     return out_dir
 
 
@@ -175,11 +167,7 @@ def run_germline(in_fp, panel_fp, pcgr_dir, threads=1, pcgr_conda=None, pcgrr_co
     if not sample_id:
         sample_id = 'nosampleset'
 
-    # NOTE(SW): Nextflow FusionFS v0.6.5 does not support PCGR output to S3; instead write to a
-    # temporary directory outside of the FusionFS mounted directory then manually copy across
-
     out_dir = 'cpsr_output/'
-    tmp_dir = tempfile.TemporaryDirectory()
 
     command_args = [
         f'--sample_id {sample_id}',
@@ -200,7 +188,7 @@ def run_germline(in_fp, panel_fp, pcgr_dir, threads=1, pcgr_conda=None, pcgrr_co
         command_args.append(f'--pcgr_dir {pcgr_dir}')
 
     # NOTE(SW): placed here to always have output directory last
-    command_args.append(f'--output_dir {tmp_dir.name}')
+    command_args.append(f'--output_dir {out_dir}')
 
     delimiter_padding = ' ' * 10
     delimiter = f' \\\n{delimiter_padding}'
@@ -218,8 +206,6 @@ def run_germline(in_fp, panel_fp, pcgr_dir, threads=1, pcgr_conda=None, pcgrr_co
         command = command_formatting + command_conda + command
 
     util.execute_command(command)
-
-    shutil.copytree(tmp_dir.name, out_dir)
 
     return out_dir
 
