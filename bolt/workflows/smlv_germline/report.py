@@ -29,7 +29,7 @@ def entry(ctx, **kwargs):
     """
 
     # BCFtools stats
-    run_bcftool_stats(kwargs['vcf_fp'], kwargs['normal_name'])
+    run_bcftool_stats(kwargs['vcf_unfiltered_fp'], kwargs['normal_name'])
 
     # Variant counts
     variant_counts_input = count_variants(kwargs['vcf_unfiltered_fp'])
@@ -76,7 +76,7 @@ def entry(ctx, **kwargs):
 
 def run_bcftool_stats(vcf_fp, normal_name):
     command = fr'''
-        bcftools stats {vcf_fp} | \
+        bcftools stats -f PASS,. {vcf_fp} | \
             sed '6 s/{vcf_fp}$/{normal_name}/' > {normal_name}.germline.bcftools_stats.txt
     '''
     util.execute_command(command)
