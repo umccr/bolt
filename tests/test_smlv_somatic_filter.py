@@ -16,11 +16,11 @@ HEADER_STR = (
     '##FORMAT=<ID=AD,Number=.,Type=Integer,Description="">\n'
     '##FORMAT=<ID=AF,Number=A,Type=Float,Description="">\n'
     '##FORMAT=<ID=GT,Number=1,Type=String,Description="">\n'
-    '##INFO=<ID=GIAB_CONF,Number=0,Type=Flag,Description="">\n'
+    '##INFO=<ID=HMF_GIAB_CONF,Number=0,Type=Flag,Description="">\n'
     '##INFO=<ID=SEGDUP,Number=0,Type=Flag,Description="">\n'
     '##INFO=<ID=PON_COUNT,Number=1,Type=Integer,Description="">\n'
     '##INFO=<ID=ENCODE,Number=0,Type=Flag,Description="">\n'
-    '##INFO=<ID=HOTSPOT,Number=0,Type=Flag,Description="">\n'
+    '##INFO=<ID=HMF_HOTSPOT,Number=0,Type=Flag,Description="">\n'
     '##INFO=<ID=gnomAD_AF,Number=1,Type=Float,Description="">\n'
     '##contig=<ID=chr1,length=248956422>\n'
     '#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tsample\n'
@@ -98,7 +98,7 @@ class TestSmlvSomaticFilter(unittest.TestCase):
     def test_min_ad_filter(self):
         record = get_record(
             **self.records['filter_min_ad3'],
-            info_data={'GIAB_CONF': ''},
+            info_data={'HMF_GIAB_CONF': ''},
         )
         smlv_somatic_filter.set_filter_data(record, 0)
         assert bolt_constants.VcfFilter.MIN_AD.value in record.FILTERS
@@ -107,7 +107,7 @@ class TestSmlvSomaticFilter(unittest.TestCase):
     def test_min_ad_difficult_filter(self):
         record = get_record(
             **self.records['filter_min_ad5'],
-            info_data={'SEGDUP': '', 'GIAB_CONF': ''},
+            info_data={'SEGDUP': '', 'HMF_GIAB_CONF': ''},
         )
         smlv_somatic_filter.set_filter_data(record, 0)
 
@@ -190,7 +190,7 @@ class TestSmlvSomaticFilter(unittest.TestCase):
 
     def test_clinical_potential_rescue_general(self):
         info_data_sets = [
-            {'HOTSPOT': ''},
+            {'HMF_HOTSPOT': ''},
             {'PCGR_MUTATION_HOTSPOT': ''},
             {'PCGR_COSMIC_COUNT': 11},
             {'PCGR_TCGA_PANCANCER_COUNT': 6},
@@ -273,7 +273,7 @@ class TestSmlvSomaticFilter(unittest.TestCase):
             record = get_record(
                 **self.records['filter_min_ad3'],
                 vfilter=vfilter,
-                info_data={'HOTSPOT': ''},
+                info_data={'HMF_HOTSPOT': ''},
             )
             smlv_somatic_filter.set_filter_data(record, 0)
 
@@ -288,7 +288,7 @@ class TestSmlvSomaticFilter(unittest.TestCase):
         record = get_record(
             **self.records['pass_af10'],
             vfilter='SEGDUP',
-            info_data={'HOTSPOT': ''},
+            info_data={'HMF_HOTSPOT': ''},
         )
         smlv_somatic_filter.set_filter_data(record, 0)
 

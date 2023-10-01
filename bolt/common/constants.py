@@ -93,8 +93,8 @@ class VcfInfo(enum.Enum):
 
     PON_COUNT = 'PON_COUNT'
 
-    HOTSPOT = 'HOTSPOT'
-    GIAB_CONF = 'GIAB_CONF'
+    HMF_HOTSPOT = 'HMF_HOTSPOT'
+    HMF_GIAB_CONF = 'HMF_GIAB_CONF'
 
     ENCODE = 'ENCODE'
     SEGDUP = 'SEGDUP'

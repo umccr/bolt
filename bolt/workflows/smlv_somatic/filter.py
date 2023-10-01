@@ -104,7 +104,7 @@ def set_filter_data(record, tumor_index):
         if any(record.INFO.get(e) is not None for e in difficult_region_tags):
             filters.append(constants.VcfFilter.MIN_AD_DIFFICULT)
 
-        if record.INFO.get(constants.VcfInfo.GIAB_CONF.value) is None:
+        if record.INFO.get(constants.VcfInfo.HMF_GIAB_CONF.value) is None:
             filters.append(constants.VcfFilter.MIN_AD_NON_GIAB)
 
     # NOTE(SW): filter_somatic_vcf from umccr/vcf_stuff includes a mappability filter but the INFO
@@ -183,7 +183,7 @@ def set_filter_data(record, tumor_index):
     tcga_pancancer_count = record.INFO.get(constants.VcfInfo.PCGR_TCGA_PANCANCER_COUNT.value, 0)
     icgc_pcawg_count = record.INFO.get(constants.VcfInfo.PCGR_ICGC_PCAWG_COUNT.value, 0)
     if (
-        record.INFO.get(constants.VcfInfo.HOTSPOT.value) is not None or
+        record.INFO.get(constants.VcfInfo.HMF_HOTSPOT.value) is not None or
         record.INFO.get(constants.VcfInfo.PCGR_MUTATION_HOTSPOT.value) is not None or
         any(e in clinvar_clinsigs for e in constants.CLINVAR_CLINSIGS_RESCUE) or
         cosmic_count >= constants.MIN_COSMIC_COUNT_RESCUE or
