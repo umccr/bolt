@@ -121,6 +121,7 @@ class VcfInfo(enum.Enum):
     CLINICAL_POTENTIAL_RESCUE = 'CLINICAL_POTENTIAL_RESCUE'
 
     GERMLINE_LEAKAGE = 'GERMLINE_LEAKAGE'
+    GERMLINE_LEAKAGE_CALLED = 'GERMLINE_LEAKAGE_CALLED'
 
     ANN = 'ANN'
 
@@ -339,6 +340,14 @@ VCF_HEADER_ENTRIES = {
         'Type': 'Flag',
         'Description': (
             'Somatic variant considered to be germline on the basis of PON hits or gnomAD AF'
+        ),
+    },
+    VcfInfo.GERMLINE_LEAKAGE_CALLED: {
+        'Number': '0',
+        'Type': 'Flag',
+        'Description': (
+            'Variant had an equivalent call in the somatic sample that was considered to be '
+            'germline leakage'
         ),
     },
 

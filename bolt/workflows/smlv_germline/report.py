@@ -77,7 +77,7 @@ def entry(ctx, **kwargs):
 def run_bcftool_stats(vcf_fp, normal_name):
     command = fr'''
         bcftools stats -f PASS,. {vcf_fp} | \
-            sed '6 s/{vcf_fp}$/{normal_name}/' > {normal_name}.germline.bcftools_stats.txt
+            sed '6 s#{vcf_fp}$#{normal_name}#' > {normal_name}.germline.bcftools_stats.txt
     '''
     util.execute_command(command)
 
@@ -88,7 +88,7 @@ def count_variants(fp):
 
 
 def split_multiallelic_records(fp):
-    fp_out = fp.replace('.vcf.gz', '.norm.vcf.gz')
+    fp_out = pathlib.Path(fp).name.replace('.vcf.gz', '.norm.vcf.gz')
     command = fr'''
         bcftools norm -m - -o {fp_out} {fp}
     '''
