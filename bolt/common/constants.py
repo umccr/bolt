@@ -120,9 +120,6 @@ class VcfInfo(enum.Enum):
     SAGE_HOTSPOT_RESCUE = 'SAGE_HOTSPOT_RESCUE'
     CLINICAL_POTENTIAL_RESCUE = 'CLINICAL_POTENTIAL_RESCUE'
 
-    GERMLINE_LEAKAGE = 'GERMLINE_LEAKAGE'
-    GERMLINE_LEAKAGE_CALLED = 'GERMLINE_LEAKAGE_CALLED'
-
     ANN = 'ANN'
 
     RESCUED_FILTERS_EXISTING = 'RESCUED_FILTERS_EXISTING'
@@ -333,22 +330,6 @@ VCF_HEADER_ENTRIES = {
         'Number': '0',
         'Type': 'Flag',
         'Description': '',
-    },
-
-    VcfInfo.GERMLINE_LEAKAGE: {
-        'Number': '0',
-        'Type': 'Flag',
-        'Description': (
-            'Somatic variant considered to be germline on the basis of PON hits or gnomAD AF'
-        ),
-    },
-    VcfInfo.GERMLINE_LEAKAGE_CALLED: {
-        'Number': '0',
-        'Type': 'Flag',
-        'Description': (
-            'Variant had an equivalent call in the somatic sample that was considered to be '
-            'germline leakage'
-        ),
     },
 
     VcfInfo.ANN: {

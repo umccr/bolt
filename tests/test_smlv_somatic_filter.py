@@ -148,15 +148,12 @@ class TestSmlvSomaticFilter(unittest.TestCase):
 
 
     def test_common_population_filter(self):
-        # NOTE(SW): this also has INFO/GERMLINE_LEAKAGE applied since all variants with FILTER set
-        # to only gnomAD_common are considered as such; I expect this to be changed.
         record = get_record(
             **self.records['pass_af10'],
             info_data={'gnomAD_AF': 0.01},
         )
         smlv_somatic_filter.set_filter_data(record, 0)
         assert record.FILTERS == [bolt_constants.VcfFilter.GNOMAD_COMMON.value]
-        assert record.INFO.get(bolt_constants.VcfInfo.GERMLINE_LEAKAGE.value) is not None
 
 
 
@@ -225,27 +222,6 @@ class TestSmlvSomaticFilter(unittest.TestCase):
             smlv_somatic_filter.set_filter_data(record, 0)
             assert not record.FILTER
             assert record.INFO.get(rescue_tag_str) is not None
-
-
-
-    def test_germline_leakage_pon(self):
-        record = get_record(
-            **self.records['pass_af20'],
-            info_data={'PON_COUNT': 6},
-        )
-        smlv_somatic_filter.set_filter_data(record, 0)
-        assert record.FILTERS == [bolt_constants.VcfFilter.PON.value]
-        assert record.INFO.get(bolt_constants.VcfInfo.GERMLINE_LEAKAGE.value) is not None
-
-
-    def test_germline_leakage_gnomad_af(self):
-        record = get_record(
-            **self.records['pass_af10'],
-            info_data={'gnomAD_AF': 0.01},
-        )
-        smlv_somatic_filter.set_filter_data(record, 0)
-        assert record.FILTERS == [bolt_constants.VcfFilter.GNOMAD_COMMON.value]
-        assert record.INFO.get(bolt_constants.VcfInfo.GERMLINE_LEAKAGE.value) is not None
 
 
 
