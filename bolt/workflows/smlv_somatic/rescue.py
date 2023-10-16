@@ -15,10 +15,16 @@ from ...common import constants
 
 @click.command(name='rescue')
 @click.pass_context
+
+@click.option('--tumor_name', required=True, type=str)
+
 @click.option('--vcf_fp', required=True, type=click.Path(exists=True))
+
 @click.option('--sage_vcf_fp', required=True, type=click.Path(exists=True))
 @click.option('--hotspots_fp', required=True, type=click.Path(exists=True))
-@click.option('--output_fp', required=True, type=click.Path())
+
+@click.option('--output_dir', required=True, type=click.Path())
+
 def entry(ctx, **kwargs):
     '''Rescue variants using SAGE calls\f
 
@@ -26,11 +32,24 @@ def entry(ctx, **kwargs):
     2. Rescue/annotate passing variants otherwise update FILTER accordingly with existing SAGE calls
     3. Add new SAGE variants to input VCF
     '''
-    # Identify variants that fall within hotspots
+
+    # Create output directory
+    output_dir = pathlib.Path(kwargs['output_dir'])
+    output_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
 
     # Select PASS SAGE variants in hotspots and then split into existing and novel calls
-    sage_pass_vcf_fp = select_sage_pass_hotspot(kwargs['sage_vcf_fp'], kwargs['hotspots_fp'])
-    sage_existing_vcf_fp, sage_novel_vcf_fp = get_sage_existing_and_novel(sage_pass_vcf_fp, kwargs['vcf_fp'])
+    sage_pass_vcf_fp = select_sage_pass_hotspot(
+        kwargs['sage_vcf_fp'],
+        kwargs['tumor_name'],
+        kwargs['hotspots_fp'],
+        output_dir,
+    )
+
+    sage_existing_vcf_fp, sage_novel_vcf_fp = get_sage_existing_and_novel(
+        kwargs['vcf_fp'],
+        sage_pass_vcf_fp,
+        output_dir,
+    )
 
     # Perform the following for variants re-called by SAGE:
     #  - SAGE FILTER=PASS, input FILTER=PASS:  set INFO/SAGE_HOTSPOT [annotate]
@@ -38,67 +57,79 @@ def entry(ctx, **kwargs):
     #  - SAGE FILTER!=PASS:                    append SAGE_lowconf to FILTER [exclude]
     # Additionally transfer SAGE FORMAT/AD, FORMAT/AF, FORMAT/DP, FORMAT/SB with the 'SAGE_' prefix for all
     # re-called variants regardless of FILTER
-    vcf_anno_vcf_fp = annotate_existing_sage_calls(sage_existing_vcf_fp, kwargs['vcf_fp'])
+    vcf_anno_vcf_fp = annotate_existing_sage_calls(
+        kwargs['vcf_fp'],
+        kwargs['tumor_name'],
+        sage_existing_vcf_fp,
+        output_dir,
+    )
 
     # Combine annotated, existing calls with SAGE novel calls
-    combined_vcf_fp = combine_sage_novel(sage_novel_vcf_fp, vcf_anno_vcf_fp, kwargs['output_fp'])
+    combined_vcf_fp = combine_sage_novel(
+        sage_novel_vcf_fp,
+        vcf_anno_vcf_fp,
+        kwargs['tumor_name'],
+        output_dir,
+    )
 
 
-def select_sage_pass_hotspot(in_fp, hotspots_fp):
-    in_fn = pathlib.Path(in_fp).name
-    out_fp = f'{in_fn.replace(".vcf.gz", ".hotspot_pass.vcf.gz")}'
+def select_sage_pass_hotspot(input_fp, tumor_name, hotspots_fp, output_dir):
+    output_fp = output_dir / f'{tumor_name}.hotspot_pass.vcf.gz'
+
     command = fr'''
-        bcftools view -f PASS,. -R {hotspots_fp} -o {out_fp} {in_fp} && \
-            bcftools index -t {out_fp}
+        bcftools view -f PASS,. -R {hotspots_fp} -o {output_fp} {input_fp} && \
+            bcftools index -t {output_fp}
     '''
     util.execute_command(command)
-    return out_fp
+
+    return output_fp
 
 
-def get_sage_existing_and_novel(sage_fp, vcf_fp):
-    dp = pathlib.Path('sage_existing_and_novel_isec/')
-    util.execute_command(f'bcftools isec -p {dp} {vcf_fp} {sage_fp}')
-    sage_existing_fp = dp / '0003.vcf'  # records from sage_fp shared by vcf_fp
-    sage_novel_fp = dp / '0001.vcf'  # records private to sage_fp
+def get_sage_existing_and_novel(input_fp, sage_vcf_fp, output_dir):
+    isec_output_dir = output_dir / 'sage_existing_and_novel_isec/'
+
+    util.execute_command(f'bcftools isec -p {isec_output_dir} {input_fp} {sage_vcf_fp}')
+
+    sage_existing_fp = isec_output_dir / '0003.vcf'  # records from sage_fp shared by vcf_fp
+    sage_novel_fp = isec_output_dir / '0001.vcf'  # records private to sage_fp
     return sage_existing_fp, sage_novel_fp
 
 
-def annotate_existing_sage_calls(sage_fp, vcf_in_fp):
+def annotate_existing_sage_calls(input_fp, tumor_name, sage_vcf_fp, output_dir):
     # Read all SAGE calls into memory
     sage_calls = dict()
-    for record in cyvcf2.VCF(sage_fp):
+    for record in cyvcf2.VCF(sage_vcf_fp):
         key = (record.CHROM, record.POS, record.REF, tuple(record.ALT))
         assert key not in sage_calls
         sage_calls[key] = record
 
     # Get input file handle
-    vcf_in_fh = cyvcf2.VCF(vcf_in_fp)
+    input_fh = cyvcf2.VCF(input_fp)
 
     # Add header entries so that they are included in the output file via templating done below
-    util.add_vcf_header_entry(vcf_in_fh, constants.VcfFilter.SAGE_LOWCONF)
+    util.add_vcf_header_entry(input_fh, constants.VcfFilter.SAGE_LOWCONF)
 
-    util.add_vcf_header_entry(vcf_in_fh, constants.VcfInfo.SAGE_HOTSPOT)
-    util.add_vcf_header_entry(vcf_in_fh, constants.VcfInfo.SAGE_RESCUE)
+    util.add_vcf_header_entry(input_fh, constants.VcfInfo.SAGE_HOTSPOT)
+    util.add_vcf_header_entry(input_fh, constants.VcfInfo.SAGE_RESCUE)
 
     # TODO(SW): check that defined header descriptions match those in the SAGE fp; collect as list
-    # here and iterate to check and then add to vcf_in_fh header also in another loop
+    # here and iterate to check and then add to input_fp header also in another loop
 
-    util.add_vcf_header_entry(vcf_in_fh, constants.VcfFormat.SAGE_AD)
-    util.add_vcf_header_entry(vcf_in_fh, constants.VcfFormat.SAGE_AF)
-    util.add_vcf_header_entry(vcf_in_fh, constants.VcfFormat.SAGE_DP)
-    util.add_vcf_header_entry(vcf_in_fh, constants.VcfFormat.SAGE_SB)
+    util.add_vcf_header_entry(input_fh, constants.VcfFormat.SAGE_AD)
+    util.add_vcf_header_entry(input_fh, constants.VcfFormat.SAGE_AF)
+    util.add_vcf_header_entry(input_fh, constants.VcfFormat.SAGE_DP)
+    util.add_vcf_header_entry(input_fh, constants.VcfFormat.SAGE_SB)
 
     # Open output file and use header from input file
-    vcf_in_fn = pathlib.Path(vcf_in_fp).name
-    vcf_out_fp = f'{vcf_in_fn.replace(".vcf.gz", ".anno.vcf.gz")}'
-    vcf_out_fh = cyvcf2.Writer(vcf_out_fp, vcf_in_fh, 'wz')
+    output_fp = output_dir / f'{tumor_name}.anno.vcf.gz'
+    output_fh = cyvcf2.Writer(output_fp, input_fh, 'wz')
 
     # Annotate SAGE recalls
-    for record in vcf_in_fh:
+    for record in input_fh:
         # Write unmodified records that were not re-called by SAGE
         key = (record.CHROM, record.POS, record.REF, tuple(record.ALT))
         if not (sage_record := sage_calls.get(key)):
-            vcf_out_fh.write_record(record)
+            output_fh.write_record(record)
             continue
 
         # Perform the following for records re-called by SAGE:
@@ -124,22 +155,24 @@ def annotate_existing_sage_calls(sage_fp, vcf_in_fp):
         record.set_format(constants.VcfFormat.SAGE_DP.value, sage_record.format('DP'))
         record.set_format(constants.VcfFormat.SAGE_SB.value, sage_record.format('SB'))
 
-        vcf_out_fh.write_record(record)
+        output_fh.write_record(record)
 
     # Explicitly close to flush buffer then index output file
-    vcf_out_fh.close()
-    util.execute_command(f'bcftools index -t {vcf_out_fp}')
+    output_fh.close()
+    util.execute_command(f'bcftools index -t {output_fp}')
 
-    return vcf_out_fp
+    return output_fp
 
 
-def combine_sage_novel(sage_novel_fp, anno_fp, output_fp):
+def combine_sage_novel(sage_novel_fp, anno_fp, tumor_name, output_dir):
 
     # TODO(SW): check whether we need to reorder samples
 
+    output_fp = output_dir / f'{tumor_name}.rescued.vcf.gz'
+
     # We must rename some FORMAT fields to avoid namespace collision between the SAGE and DRAGEN
     # VCF; the input for the concat operation must also be bgzip compressed and have an index
-    sage_novel_prep_fp = prepare_sage_novel(sage_novel_fp)
+    sage_novel_prep_fp = prepare_sage_novel(sage_novel_fp, tumor_name, output_dir)
 
     # Add novel SAGE calls to annotated, existing calls
     command = fr'''
@@ -149,7 +182,7 @@ def combine_sage_novel(sage_novel_fp, anno_fp, output_fp):
     util.execute_command(command)
 
 
-def prepare_sage_novel(in_fp):
+def prepare_sage_novel(input_fp, tumor_name, output_dir):
     # Annotations to rename
     # NOTE(SW): here I only rename FORMAT/SB since SAGE measures this differently while others
     # should be sufficiently interchangeable
@@ -172,12 +205,14 @@ def prepare_sage_novel(in_fp):
     )
 
     # Write file rename annotations
-    with open('rename_annotations.tsv', 'w') as fh:
+    rename_anno_fp = output_dir / 'rename_annotations.tsv'
+    with rename_anno_fp.open('w') as fh:
         for ann, ann_new in annotations_rename:
             print(ann, ann_new, sep='\t', file=fh)
 
     # Get and write required header entries to file
-    with open('header_entries.tsv', 'w') as fh:
+    header_entries_fp = output_dir / 'header_entries.tsv'
+    with header_entries_fp.open('w') as fh:
         print(util.get_vcf_header_line(constants.VcfInfo.SAGE_HOTSPOT), file=fh)
         print(util.get_vcf_header_line(constants.VcfInfo.SAGE_NOVEL), file=fh)
 
@@ -203,12 +238,12 @@ def prepare_sage_novel(in_fp):
     #   2. add new SAGE annotations to each call
     #   3. retrain only target annotations
     #   4. index output VCF
-    out_fp = 'sage.novel.vcf.gz'
+    output_fp = f'{tumor_name}.sage.novel.vcf.gz'
     command = fr'''
         bcftools annotate \
-            --rename-annots rename_annotations.tsv \
-            --header-lines header_entries.tsv \
-            {in_fp} | \
+            --rename-annots {rename_anno_fp} \
+            --header-lines {header_entries_fp} \
+            {input_fp} | \
             awk '
                 BEGIN {{ OFS="\t" }}
                 $1 ~ /^#/ {{ print }}
@@ -222,9 +257,9 @@ def prepare_sage_novel(in_fp):
                 }}
             ' | \
             bcftools annotate --remove '{annotations_retain_str}' | \
-            bcftools view -o {out_fp} && \
-            bcftools index -t {out_fp}
+            bcftools view -o {output_fp} && \
+            bcftools index -t {output_fp}
     '''
     util.execute_command(command)
 
-    return out_fp
+    return output_fp

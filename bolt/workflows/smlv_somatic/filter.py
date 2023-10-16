@@ -11,15 +11,23 @@ from ...common import constants
 
 @click.command(name='filter')
 @click.pass_context
-@click.option('--vcf_fp', required=True, type=click.Path(exists=True))
 
 @click.option('--tumor_name', required=True, type=str)
+
+@click.option('--vcf_fp', required=True, type=click.Path(exists=True))
+
+@click.option('--output_dir', required=True, type=click.Path())
 
 def entry(ctx, **kwargs):
     '''Set and apply filters for variants\f
     '''
-    in_fh = cyvcf2.VCF(kwargs['vcf_fp'])
 
+    # Create output directory
+    output_dir = pathlib.Path(kwargs['output_dir'])
+    output_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
+
+    # Open input VCF and set required header entries for output
+    in_fh = cyvcf2.VCF(kwargs['vcf_fp'])
     header_filters = (
         constants.VcfFilter.MIN_AF,
         constants.VcfFilter.MIN_AD,
@@ -37,10 +45,8 @@ def entry(ctx, **kwargs):
     for header_enum in header_filters:
         util.add_vcf_header_entry(in_fh, header_enum)
 
-    vcf_fn = pathlib.Path(kwargs['vcf_fp']).name
-    vcf_prefix = vcf_fn.replace('.vcf.gz', '')
-
-    filters_fp = f'{vcf_prefix}.filters_set.vcf.gz'
+    # Apply FILTERs and annotate with other INFO data
+    filters_fp = output_dir / f'{kwargs["tumor_name"]}.filters_set.vcf.gz'
     filters_fh = cyvcf2.Writer(filters_fp, in_fh, 'wz')
 
     tumor_index = in_fh.samples.index(kwargs['tumor_name'])
@@ -49,8 +55,9 @@ def entry(ctx, **kwargs):
         filters_fh.write_record(record)
     filters_fh.close()
 
-    # Apply set filters
-    command = f'bcftools view -f PASS,. -o {vcf_prefix}.pass.vcf.gz {filters_fp}'
+    # Apply set FILTERs
+    set_fp = output_dir / f'{kwargs["tumor_name"]}.pass.vcf.gz'
+    command = f'bcftools view -f PASS,. -o {set_fp} {filters_fp}'
     util.execute_command(command)
 
 

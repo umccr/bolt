@@ -13,6 +13,7 @@ from ...common import pcgr
 
 @click.command(name='annotate')
 @click.pass_context
+
 @click.option('--tumor_name', required=True, type=str)
 @click.option('--normal_name', required=True, type=str)
 
@@ -28,6 +29,9 @@ from ...common import pcgr
 @click.option('--pcgrr_conda', required=False, type=str)
 
 @click.option('--threads', required=False, default=4, type=int)
+
+@click.option('--output_dir', required=True, type=click.Path())
+
 def entry(ctx, **kwargs):
     '''Annotate variants with information from several sources\f
 
@@ -36,10 +40,13 @@ def entry(ctx, **kwargs):
     3. Annotate with panel of normal counts
     4. Prepare VCF for PCGR then annotate with clinical information using PCGR
     '''
-    fn_prefix = get_filename_prefix(kwargs['vcf_fp'])
+
+    # Create output directory
+    output_dir = pathlib.Path(kwargs['output_dir'])
+    output_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
 
     # Set all FILTER="." to FILTER="PASS" as required by PURPLE
-    filter_pass_fp = set_filter_pass(kwargs['vcf_fp'], fn_prefix)
+    filter_pass_fp = set_filter_pass(kwargs['vcf_fp'], kwargs['tumor_name'], output_dir)
 
     # Annotate with:
     #   - gnomAD r2.1 [INFO/gnomAD_AF]
@@ -49,12 +56,24 @@ def entry(ctx, **kwargs):
     #   - UCSC segmental duplications [INFO/SEGDUP]
     #   - GA4GH genome stratifications [INFO/TRICKY_*]
     #   - One other LCR file (competes with GA4GH LCR) [INFO/TRICKY_LCR]
-    vcfanno_fp = general_annotations(filter_pass_fp, fn_prefix, kwargs['threads'], kwargs['annotations_dir'])
+    vcfanno_fp = general_annotations(
+        filter_pass_fp,
+        kwargs['tumor_name'],
+        kwargs['threads'],
+        kwargs['annotations_dir'],
+        output_dir,
+    )
 
     # Annotate with UMCCR panel of normals [INFO/PON_COUNT]
     # NOTE(SW): done separately from above as the variant identity for the INDEL PON operates only
     # on position rather than position /and/ reference + allele
-    pon_fp = panel_of_normal_annotations(vcfanno_fp, fn_prefix, kwargs['threads'], kwargs['pon_dir'])
+    pon_fp = panel_of_normal_annotations(
+        vcfanno_fp,
+        kwargs['tumor_name'],
+        kwargs['threads'],
+        kwargs['pon_dir'],
+        output_dir,
+    )
 
     # Annotate with cancer-related and functional information from a range of sources using PCGR
     #   - Select variants to process - there is an upper limit for PCGR of around 500k
@@ -68,77 +87,93 @@ def entry(ctx, **kwargs):
     #       - Hits in COSMIC [INFO/PCGR_COSMIC_COUNT]
     #       - Hits in TCGA [INFO/PCGR_TCGA_PANCANCER_COUNT]
     #       - Hits in PCAWG [INFO/PCGR_ICGC_PCAWG_COUNT]
-    selection_data = select_variants(pon_fp, fn_prefix, kwargs['cancer_genes_fp'])
+    # Set selected data or full input
+    selection_data = select_variants(
+        pon_fp,
+        kwargs['tumor_name'],
+        kwargs['cancer_genes_fp'],
+        output_dir,
+    )
 
-    # NOTE(SW): here I set the correct filepath when filtering was not required
     if not (pcgr_prep_input_fp := selection_data.get('filtered')):
         pcgr_prep_input_fp = selection_data['selected']
-    pcgr_prep_fp = pcgr.prepare_vcf_somatic(pcgr_prep_input_fp, fn_prefix, kwargs['tumor_name'], kwargs['normal_name'])
+
+    # Prepare VCF for PCGR annotation
+    pcgr_prep_fp = pcgr.prepare_vcf_somatic(
+        pcgr_prep_input_fp,
+        kwargs['tumor_name'],
+        kwargs['normal_name'],
+        output_dir,
+    )
+
+    # Run PCGR
     pcgr_dir = pcgr.run_somatic(
         pcgr_prep_fp,
         kwargs['pcgr_data_dir'],
+        output_dir,
         threads=kwargs['threads'],
         pcgr_conda=kwargs['pcgr_conda'],
         pcgrr_conda=kwargs['pcgrr_conda'],
     )
 
+    # Transfer PCGR annotations to full set of variants
     pcgr.transfer_annotations_somatic(
         selection_data['selected'],
         kwargs['tumor_name'],
-        pcgr_dir,
         selection_data.get('filter_name'),
+        pcgr_dir,
+        output_dir,
     )
 
 
-def get_filename_prefix(vcf_fp):
-    vcf_fn = pathlib.Path(vcf_fp).name
-    return vcf_fn.replace('.vcf.gz', '')
+def set_filter_pass(input_fp, tumor_name, output_dir):
+    output_fp = output_dir / f'{tumor_name}.set_filter_pass.vcf.gz'
 
+    input_fh = cyvcf2.VCF(input_fp)
+    output_fh = cyvcf2.Writer(output_fp, input_fh, 'wz')
 
-def set_filter_pass(vcf_fp, fn_prefix):
-    fp_out = f'{fn_prefix}.set_filter_pass.vcf.gz'
-
-    in_fh = cyvcf2.VCF(vcf_fp)
-    out_fh = cyvcf2.Writer(fp_out, in_fh, 'wz')
-
-    for record in in_fh:
+    for record in input_fh:
         if record.FILTER is None:
             record.FILTER = 'PASS'
-        out_fh.write_record(record)
+        output_fh.write_record(record)
 
-    return fp_out
+    return output_fp
 
 
-def general_annotations(in_fp, fn_prefix, threads, annotations_dir):
+def general_annotations(input_fp, tumor_name, threads, annotations_dir, output_dir):
     toml_fp = pathlib.Path(annotations_dir) / 'vcfanno_annotations.toml'
-    out_fp = f'{fn_prefix}.general.vcf.gz'
+
+    output_fp = output_dir / f'{tumor_name}.general_annotations.vcf.gz'
+
     command = fr'''
-        vcfanno -p {threads} -base-path $(pwd) {toml_fp} {in_fp} | bcftools view -o {out_fp} && \
-            bcftools index -t {out_fp}
+        vcfanno -p {threads} -base-path $(pwd) {toml_fp} {input_fp} | bcftools view -o {output_fp} && \
+            bcftools index -t {output_fp}
     '''
+
     util.execute_command(command)
-    return out_fp
+    return output_fp
 
 
-def panel_of_normal_annotations(in_fp, fn_prefix, threads, pon_dir):
+def panel_of_normal_annotations(input_fp, tumor_name, threads, pon_dir, output_dir):
     toml_snp_fp = pathlib.Path(pon_dir) / 'vcfanno_snps.toml'
     toml_indel_fp = pathlib.Path(pon_dir) / 'vcfanno_indels.toml'
 
-    out_fp = f'{fn_prefix}.pon.vcf.gz'
+    output_fp = output_dir / f'{tumor_name}.pon.vcf.gz'
 
     threads_quot, threads_rem = divmod(threads, 2)
 
     command = fr'''
-        vcfanno -p {threads_quot+threads_rem} -base-path $(pwd) {toml_snp_fp} {in_fp} | \
+        vcfanno -p {threads_quot+threads_rem} -base-path $(pwd) {toml_snp_fp} {input_fp} | \
             vcfanno -permissive-overlap -p {threads_quot} -base-path $(pwd) {toml_indel_fp} /dev/stdin | \
-            bcftools view -o {out_fp} && \
-            bcftools index -t {out_fp}
+            bcftools view -o {output_fp} && \
+            bcftools index -t {output_fp}
     '''
+
     util.execute_command(command)
-    return out_fp
+    return output_fp
 
 
-def select_variants(in_fp, fn_prefix, cancer_genes_fp):
+def select_variants(input_fp, tumor_name, cancer_genes_fp, output_dir):
     # Exclude variants until we hopefully move the needle below the threshold
 
 
@@ -147,18 +182,18 @@ def select_variants(in_fp, fn_prefix, cancer_genes_fp):
     # right now
 
 
-    if util.count_vcf_records(in_fp) <= constants.MAX_SOMATIC_VARIANTS:
-        return {'selected': in_fp}
+    if util.count_vcf_records(input_fp) <= constants.MAX_SOMATIC_VARIANTS:
+        return {'selected': input_fp}
 
-    pass_fps = exclude_nonpass(in_fp, fn_prefix)
+    pass_fps = exclude_nonpass(input_fp, tumor_name, output_dir)
     if util.count_vcf_records(pass_fps.get('filtered')) <= constants.MAX_SOMATIC_VARIANTS:
         return pass_fps
 
-    pop_fps = exclude_population_variants(in_fp, fn_prefix)
+    pop_fps = exclude_population_variants(input_fp, tumor_name, output_dir)
     if util.count_vcf_records(pop_fps.get('filtered')) <= constants.MAX_SOMATIC_VARIANTS:
         return pop_fps
 
-    genes_fps = exclude_non_cancer_genes(in_fp, fn_prefix, cancer_genes_fp)
+    genes_fps = exclude_non_cancer_genes(input_fp, tumor_name, cancer_genes_fp, output_dir)
     if util.count_vcf_records(genes_fps.get('filtered')) <= constants.MAX_SOMATIC_VARIANTS:
 
         # TODO(SW): log warning
@@ -168,23 +203,23 @@ def select_variants(in_fp, fn_prefix, cancer_genes_fp):
     return genes_fps
 
 
-def generic_exclude(in_fp, fn_prefix, label, header_enum, process_fn, **kwargs):
-    selected_fp = f'{fn_prefix}.{label}.vcf.gz'
-    filtered_fp = f'{fn_prefix}.{label}.filtered.vcf.gz'
+def generic_exclude(input_fp, tumor_name, label, header_enum, process_fn, output_dir, **kwargs):
+    selected_fp = output_dir / f'{tumor_name}.{label}.vcf.gz'
+    filtered_fp = output_dir / f'{tumor_name}.{label}.filtered.vcf.gz'
 
-    in_fh = cyvcf2.VCF(in_fp)
-    util.add_vcf_header_entry(in_fh, header_enum)
+    input_fh = cyvcf2.VCF(input_fp)
+    util.add_vcf_header_entry(input_fh, header_enum)
 
-    selected_fh = cyvcf2.Writer(selected_fp, in_fh, 'wz')
-    filtered_fh = cyvcf2.Writer(filtered_fp, in_fh, 'wz')
+    selected_fh = cyvcf2.Writer(selected_fp, input_fh, 'wz')
+    filtered_fh = cyvcf2.Writer(filtered_fp, input_fh, 'wz')
 
-    for record in in_fh:
+    for record in input_fh:
         process_fn(record, selected_fh=selected_fh, filtered_fh=filtered_fh, **kwargs)
 
     return {'selected': selected_fp, 'filtered': filtered_fp, 'filter_name': header_enum.value}
 
 
-def exclude_nonpass(in_fp, fn_prefix):
+def exclude_nonpass(input_fp, tumor_name, output_dir):
     # Exclude variants that don't have FILTER=PASS and are not in a hotspot
 
     header_enum = constants.VcfFilter.MAX_VARIANTS_NON_PASS
@@ -202,10 +237,10 @@ def exclude_nonpass(in_fp, fn_prefix):
             record.FILTER = ';'.join([*record.FILTERS, header_enum.value])
         selected_fh.write_record(record)
 
-    return generic_exclude(in_fp, fn_prefix, 'pass_select', header_enum, process_fn)
+    return generic_exclude(input_fp, tumor_name, 'pass_select', header_enum, process_fn, output_dir)
 
 
-def exclude_population_variants(in_fp, fn_prefix):
+def exclude_population_variants(input_fp, tumor_name, output_dir):
     # Set FILTER to MAX_VARIANTS_GNOMAD where INFO/gnomAD_AF is greater than 0.01 and variant is
     # not annotated as a hotspot
 
@@ -224,15 +259,15 @@ def exclude_population_variants(in_fp, fn_prefix):
             record.FILTER = ';'.join([*existing_filters, header_enum.value])
         selected_fh.write_record(record)
 
-    return generic_exclude(in_fp, fn_prefix, 'common_population', header_enum, process_fn)
+    return generic_exclude(input_fp, tumor_name, 'common_population', header_enum, process_fn, output_dir)
 
 
-def exclude_non_cancer_genes(in_fp, fn_prefix, bed_fp):
+def exclude_non_cancer_genes(input_fp, tumor_name, bed_fp, output_dir):
     # Set FILTER to MAX_VARIANTS_KEY_GENES where variant is not in a key cancer gene or annotated
     # as a hotspot
 
     header_enum = constants.VcfFilter.MAX_VARIANTS_NON_CANCER_GENES
-    gene_variants = get_cancer_gene_variants(in_fp, bed_fp)
+    gene_variants = get_cancer_gene_variants(input_fp, bed_fp)
 
     def process_fn(record, selected_fh, filtered_fh, *, gene_variants):
         # Write to filtered_fp if passes criteria: in a hotspot or associated with a cancer gene
@@ -245,15 +280,15 @@ def exclude_non_cancer_genes(in_fp, fn_prefix, bed_fp):
             record.FILTER = ';'.join([*existing_filters, header_enum.value])
         selected_fh.write_record(record)
 
-    return generic_exclude(in_fp, fn_prefix, 'cancer_genes', header_enum, process_fn,
-            gene_variants=gene_variants)
+    return generic_exclude(input_fp, tumor_name, 'cancer_genes', header_enum, process_fn,
+            output_dir, gene_variants=gene_variants)
 
 
-def get_cancer_gene_variants(in_fp, bed_fp):
+def get_cancer_gene_variants(input_fp, bed_fp):
     # NOTE(SW): current UMCCR cancer gene list (umccr_cancer_genes.hg38.ensembl107.sort.bed)
     # already contains 1,000 bp padding
     genes_variants_fp = pathlib.Path('genes_variants.vcf.gz')
-    util.execute_command(f'bcftools view --regions-file {bed_fp} -o {genes_variants_fp} {in_fp}')
+    util.execute_command(f'bcftools view --regions-file {bed_fp} -o {genes_variants_fp} {input_fp}')
 
     gene_variants = set()
     for record in cyvcf2.VCF(genes_variants_fp):

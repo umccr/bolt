@@ -21,24 +21,33 @@ from ... import util
 @click.option('--reference_fasta_fp', required=True, type=click.Path(exists=True))
 @click.option('--snpeff_database_dir', required=True, type=click.Path(exists=True))
 
+@click.option('--output_dir', required=True, type=click.Path())
+
 def entry(ctx, **kwargs):
     '''Annotate SVs and CNVs with functional information\f
     '''
 
+    # Create output directory
+    output_dir = pathlib.Path(kwargs['output_dir'])
+    output_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
+
+    # Create compiled VCF containing variants for annotation
     variants_fp = compile_variants(
         kwargs['sv_fp'],
         kwargs['cnv_fp'],
         kwargs['tumor_name'],
         kwargs['reference_fasta_fp'],
+        output_dir,
     )
 
-    annotate_variants(variants_fp, kwargs['snpeff_database_dir'])
+    # Annotate variants
+    annotate_variants(variants_fp, kwargs['tumor_name'], kwargs['snpeff_database_dir'], output_dir)
 
 
-def compile_variants(sv_fp, cnv_fp, tumor_name, ref_fp):
+def compile_variants(sv_fp, cnv_fp, tumor_name, ref_fp, output_dir):
 
-    out_fp = f'{tumor_name}.sv_cnv.vcf.gz'
-    out_fp_sorted = f'{out_fp.replace(".vcf.gz", ".sorted.vcf.gz")}'
+    output_fp = output_dir / f'{tumor_name}.sv_cnv.vcf.gz'
+    output_sorted_fp = output_dir / f'{tumor_name}.sv_cnv.sorted.vcf.gz'
 
     # Prepare VCF writer; use SV VCF as template
     sv_fh = cyvcf2.VCF(sv_fp)
@@ -63,12 +72,12 @@ def compile_variants(sv_fp, cnv_fp, tumor_name, ref_fp):
     for field_type, purple_field in purple_fields:
         sv_fh.add_to_header(f'##INFO=<ID=PURPLE_{purple_field},Number=1,Type={field_type},Description="PURPLE {purple_field}">')
 
-    out_fh = cyvcf2.Writer(out_fp, sv_fh, 'wz')
+    output_fh = cyvcf2.Writer(output_fp, sv_fh, 'wz')
 
     # SVs
     for record in sv_fh:
         record.INFO['SOURCE'] = 'sv_gridss'
-        out_fh.write_record(record)
+        output_fh.write_record(record)
 
     # CNVs
     # Collect information from TSV
@@ -111,12 +120,12 @@ def compile_variants(sv_fp, cnv_fp, tumor_name, ref_fp):
         ref_pos = int(record_data['pos'])
         ref = ref_fh.fetch(record_data['chrom'], ref_pos-1, ref_pos)
         record_variant_comps = (
-                record_data['chrom'],
-                record_data['pos'],
-                f'cnv_purple_{i}',
-                ref,
-                record_data['alt'],
-                '.',
+            record_data['chrom'],
+            record_data['pos'],
+            f'cnv_purple_{i}',
+            ref,
+            record_data['alt'],
+            '.',
         )
         info_str = ';'.join(f'{k}={v}' for k, v in record_data['info'].items())
 
@@ -134,34 +143,37 @@ def compile_variants(sv_fp, cnv_fp, tumor_name, ref_fp):
             sample_b_column,
         ])
 
-        record_new = out_fh.variant_from_string(record_str_new)
-        out_fh.write_record(record_new)
+        record_new = output_fh.variant_from_string(record_str_new)
+        output_fh.write_record(record_new)
 
-    out_fh.close()
+    output_fh.close()
 
-    util.execute_command(fr'''bcftools sort --temp-dir ./bcftools.XXXXXX --output {out_fp_sorted} {out_fp}''')
+    util.execute_command(fr'''
+        bcftools sort --temp-dir ./bcftools.XXXXXX --output {output_sorted_fp} {output_fp}
+    ''')
 
-    return out_fp_sorted
+    return output_sorted_fp
 
 
-def annotate_variants(fp_in, snpeff_database):
+def annotate_variants(input_fp, tumor_name, snpeff_database, output_dir):
 
-    fp_out_prefix = f'{fp_in.replace(".vcf.gz", ".annotated")}'
-    fp_out = f'{fp_out_prefix}.vcf.gz'
+    output_fp = output_dir / f'{tumor_name}.annotated.vcf.gz'
 
     # NOTE(SW): snpEff installed via Conda requires an aboslute path for the database
     snpeff_database_abs = pathlib.Path(snpeff_database).resolve()
 
+    snpeff_temp_dir = output_dir / 'snpeff_temp/'
+
     command = fr'''
-        snpEff -Xms750m -Xmx4g -Djava.io.tmpdir=output/ \
+        snpEff -Xms750m -Xmx4g -Djava.io.tmpdir={snpeff_temp_dir} \
             -dataDir {snpeff_database_abs} \
             -noStats \
             GRCh38.105 \
-            {fp_in} | \
+            {input_fp} | \
             sed -E -e 's/CHR([0-9]{{1,2}}|[XY])/chr\1/g' | \
-            bcftools view -o {fp_out};
+            bcftools view -o {output_fp};
 
-        bcftools index -t {fp_out};
+        bcftools index -t {output_fp};
     '''
 
     util.execute_command(command)

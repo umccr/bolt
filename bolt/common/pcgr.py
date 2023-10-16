@@ -10,7 +10,7 @@ from .. import util
 from ..common import constants
 
 
-def prepare_vcf_somatic(in_fp, fn_prefix, tumor_name, normal_name):
+def prepare_vcf_somatic(input_fp, tumor_name, normal_name, output_dir):
 
 
     # TODO(SW): complete comments
@@ -22,17 +22,17 @@ def prepare_vcf_somatic(in_fp, fn_prefix, tumor_name, normal_name):
     # To generate the PCGR input, I exclude all unnecessary data from the VCF and set tumor
     # and normal FORMAT/AF and FORMAT/DP annotations as INFO annotations as required by PCGR.
 
-    in_fh = cyvcf2.VCF(in_fp)
+    input_fh = cyvcf2.VCF(input_fp)
 
-    tumor_index = in_fh.samples.index(tumor_name)
-    normal_index = in_fh.samples.index(normal_name)
+    tumor_index = input_fh.samples.index(tumor_name)
+    normal_index = input_fh.samples.index(normal_name)
     assert tumor_name != normal_name
     assert tumor_index != normal_index
 
-    out_fp = f'{fn_prefix}.pcgr_prep.vcf.gz'
-    out_fh = cyvcf2.Writer.from_string(out_fp, get_minimal_header(in_fh), 'wz')
+    output_fp = output_dir / f'{tumor_name}.pcgr_prep.vcf.gz'
+    output_fh = cyvcf2.Writer.from_string(output_fp, get_minimal_header(input_fh), 'wz')
 
-    for record in in_fh:
+    for record in input_fh:
         # Collect tumor and normal FORMAT/AF and FORMAT/DP
         [tumor_dp] = record.format('DP')[tumor_index]
         [tumor_af] = record.format('AF')[tumor_index]
@@ -52,31 +52,33 @@ def prepare_vcf_somatic(in_fp, fn_prefix, tumor_name, normal_name):
         # FORMAT and sample columns
         record_variant_comps = str(record).split('\t')[:6]  # CHROM, POS, ID, REF, ALT, QUAL
         record_str_new = '\t'.join([*record_variant_comps, 'PASS', info])
-        record_new = out_fh.variant_from_string(record_str_new)
-        out_fh.write_record(record_new)
-    out_fh.close()
+        record_new = output_fh.variant_from_string(record_str_new)
+        output_fh.write_record(record_new)
+
+    output_fh.close()
 
     # Index output
-    command = fr'''bcftools index -t {out_fp}'''
+    command = fr'''bcftools index -t {output_fp}'''
     util.execute_command(command)
 
-    return out_fp
+    return output_fp
 
 
-def prepare_vcf_germline(in_fp, fn_prefix, normal_name):
+def prepare_vcf_germline(input_fp, normal_name, output_dir):
 
-    out_fp = f'{fn_prefix}.cpsr.prep.vcf.gz'
+    output_fp = output_dir / f'{normal_name}.cpsr.prep.vcf.gz'
+
     command = fr'''
-        bcftools view -s {normal_name} {in_fp} | \
-            bcftools annotate -x INFO,FILTER,FORMAT,^GT -o {out_fp};
-            bcftools index -t {out_fp};
+        bcftools view -s {normal_name} {input_fp} | \
+            bcftools annotate -x INFO,FILTER,FORMAT,^GT -o {output_fp};
+            bcftools index -t {output_fp};
         '''
+
     util.execute_command(command)
+    return output_fp
 
-    return out_fp
 
-
-def get_minimal_header(in_fh):
+def get_minimal_header(input_fh):
     # Get a minimal VCF header for the PCGR input VCF
     # Filetype line
     filetype_line = '##fileformat=VCFv4.2'
@@ -86,7 +88,7 @@ def get_minimal_header(in_fh):
     # each chromosome
     chrom_lines = list()
     chrom_prefix = [f'##contig=<ID={e},' for e in constants.CONTIGS_MAIN]
-    header_lines = in_fh.raw_header.rstrip().split('\n')
+    header_lines = input_fh.raw_header.rstrip().split('\n')
     for line in header_lines:
         if any(line.startswith(c) for c in chrom_prefix):
             chrom_lines.append(line)
@@ -106,16 +108,16 @@ def get_minimal_header(in_fh):
     return '\n'.join([filetype_line, *chrom_lines, *format_lines, column_line])
 
 
-def run_somatic(in_fp, pcgr_dir, threads=1, pcgr_conda=None, pcgrr_conda=None, purity=None, ploidy=None, sample_id=None):
+def run_somatic(input_fp, pcgr_dir, output_dir, threads=1, pcgr_conda=None, pcgrr_conda=None, purity=None, ploidy=None, sample_id=None):
 
-    out_dir = 'pcgr_output/'
+    pcgr_output_dir = output_dir / 'pcgr/'
 
     if not sample_id:
         sample_id = 'nosampleset'
 
     command_args = [
         f'--sample_id {sample_id}',
-        f'--input_vcf {in_fp}',
+        f'--input_vcf {input_fp}',
         f'--tumor_dp_tag TUMOR_DP',
         f'--tumor_af_tag TUMOR_AF',
         f'--control_dp_tag NORMAL_DP',
@@ -140,7 +142,7 @@ def run_somatic(in_fp, pcgr_dir, threads=1, pcgr_conda=None, pcgrr_conda=None, p
         command_args.append(f'--tumor_ploidy {ploidy}')
 
     # NOTE(SW): placed here to always have output directory last
-    command_args.append(f'--output_dir {out_dir}')
+    command_args.append(f'--output_dir {pcgr_output_dir}')
 
     delimiter_padding = ' ' * 10
     delimiter = f' \\\n{delimiter_padding}'
@@ -159,19 +161,19 @@ def run_somatic(in_fp, pcgr_dir, threads=1, pcgr_conda=None, pcgrr_conda=None, p
 
     util.execute_command(command)
 
-    return out_dir
+    return pcgr_output_dir
 
 
-def run_germline(in_fp, panel_fp, pcgr_dir, threads=1, pcgr_conda=None, pcgrr_conda=None, sample_id=None):
+def run_germline(input_fp, panel_fp, pcgr_dir, output_dir, threads=1, pcgr_conda=None, pcgrr_conda=None, sample_id=None):
 
     if not sample_id:
         sample_id = 'nosampleset'
 
-    out_dir = 'cpsr_output/'
+    cpsr_output_dir = output_dir / 'cpsr/'
 
     command_args = [
         f'--sample_id {sample_id}',
-        f'--input_vcf {in_fp}',
+        f'--input_vcf {input_fp}',
         f'--genome_assembly grch38',
         f'--custom_list {panel_fp}',
         # NOTE(SW): probably useful to add versioning information here; weigh against maintainence
@@ -188,7 +190,7 @@ def run_germline(in_fp, panel_fp, pcgr_dir, threads=1, pcgr_conda=None, pcgrr_co
         command_args.append(f'--pcgr_dir {pcgr_dir}')
 
     # NOTE(SW): placed here to always have output directory last
-    command_args.append(f'--output_dir {out_dir}')
+    command_args.append(f'--output_dir {cpsr_output_dir}')
 
     delimiter_padding = ' ' * 10
     delimiter = f' \\\n{delimiter_padding}'
@@ -207,10 +209,10 @@ def run_germline(in_fp, panel_fp, pcgr_dir, threads=1, pcgr_conda=None, pcgrr_co
 
     util.execute_command(command)
 
-    return out_dir
+    return cpsr_output_dir
 
 
-def transfer_annotations_somatic(src_fp, fn_prefix, pcgr_dir, filter_name):
+def transfer_annotations_somatic(input_fp, tumor_name, filter_name, pcgr_dir, output_dir):
     # Set destination INFO field names and source TSV fields
     info_field_map = {
         constants.VcfInfo.PCGR_MUTATION_HOTSPOT: 'MUTATION_HOTSPOT',
@@ -229,34 +231,34 @@ def transfer_annotations_somatic(src_fp, fn_prefix, pcgr_dir, filter_name):
     pcgr_data = collect_pcgr_annotation_data(pcgr_tsv_fp, pcgr_vcf_fp, info_field_map)
 
     # Open filehandles, set required header entries
-    src_fh = cyvcf2.VCF(src_fp)
+    input_fh = cyvcf2.VCF(input_fp)
 
-    util.add_vcf_header_entry(src_fh, constants.VcfInfo.PCGR_TIER)
-    util.add_vcf_header_entry(src_fh, constants.VcfInfo.PCGR_CSQ)
-    util.add_vcf_header_entry(src_fh, constants.VcfInfo.PCGR_MUTATION_HOTSPOT)
-    util.add_vcf_header_entry(src_fh, constants.VcfInfo.PCGR_CLINVAR_CLNSIG)
-    util.add_vcf_header_entry(src_fh, constants.VcfInfo.PCGR_COSMIC_COUNT)
-    util.add_vcf_header_entry(src_fh, constants.VcfInfo.PCGR_TCGA_PANCANCER_COUNT)
-    util.add_vcf_header_entry(src_fh, constants.VcfInfo.PCGR_ICGC_PCAWG_COUNT)
+    util.add_vcf_header_entry(input_fh, constants.VcfInfo.PCGR_TIER)
+    util.add_vcf_header_entry(input_fh, constants.VcfInfo.PCGR_CSQ)
+    util.add_vcf_header_entry(input_fh, constants.VcfInfo.PCGR_MUTATION_HOTSPOT)
+    util.add_vcf_header_entry(input_fh, constants.VcfInfo.PCGR_CLINVAR_CLNSIG)
+    util.add_vcf_header_entry(input_fh, constants.VcfInfo.PCGR_COSMIC_COUNT)
+    util.add_vcf_header_entry(input_fh, constants.VcfInfo.PCGR_TCGA_PANCANCER_COUNT)
+    util.add_vcf_header_entry(input_fh, constants.VcfInfo.PCGR_ICGC_PCAWG_COUNT)
 
-    out_fp = f'{fn_prefix}.annotations.vcf.gz'
-    out_fh = cyvcf2.Writer(out_fp, src_fh, 'wz')
+    output_fp = output_dir / f'{tumor_name}.annotations.vcf.gz'
+    output_fh = cyvcf2.Writer(output_fp, input_fh, 'wz')
 
     # Transfer annotations and write to output
-    for record in src_fh:
+    for record in input_fh:
         # Do not process chrM since *snvs_indels.tiers.tsv does not include these annotations
         if record.CHROM == 'chrM':
             continue
         # Immediately print out variants that were not annotated
         if filter_name in record.FILTERS:
-            out_fh.write_record(record)
+            output_fh.write_record(record)
             continue
         # Annotate and write
         record_ann = annotate_record(record, pcgr_data)
-        out_fh.write_record(record_ann)
+        output_fh.write_record(record_ann)
 
 
-def transfer_annotations_germline(src_fp, sample_name, cpsr_dir):
+def transfer_annotations_germline(input_fp, normal_name, cpsr_dir, output_dir):
     # Set destination INFO field names and source TSV fields
     info_field_map = {
         constants.VcfInfo.CPSR_FINAL_CLASSIFICATION: 'FINAL_CLASSIFICATION',
@@ -265,8 +267,8 @@ def transfer_annotations_germline(src_fp, sample_name, cpsr_dir):
         constants.VcfInfo.CPSR_CSQ: 'CSQ',
     }
 
-    cpsr_tsv_fp = pathlib.Path(cpsr_dir) / f'{sample_name}.cpsr.grch38.snvs_indels.tiers.tsv'
-    cpsr_vcf_fp = pathlib.Path(cpsr_dir) / f'{sample_name}.cpsr.grch38.vcf.gz'
+    cpsr_tsv_fp = pathlib.Path(cpsr_dir) / f'{normal_name}.cpsr.grch38.snvs_indels.tiers.tsv'
+    cpsr_vcf_fp = pathlib.Path(cpsr_dir) / f'{normal_name}.cpsr.grch38.vcf.gz'
 
     # Enforce matching defined and source INFO annotations
     check_annotation_headers(info_field_map, cpsr_vcf_fp)
@@ -275,25 +277,25 @@ def transfer_annotations_germline(src_fp, sample_name, cpsr_dir):
     cpsr_data = collect_cpsr_annotation_data(cpsr_tsv_fp, cpsr_vcf_fp, info_field_map)
 
     # Open filehandles, set required header entries
-    src_fh = cyvcf2.VCF(src_fp)
+    input_fh = cyvcf2.VCF(input_fp)
 
-    util.add_vcf_header_entry(src_fh, constants.VcfInfo.CPSR_FINAL_CLASSIFICATION)
-    util.add_vcf_header_entry(src_fh, constants.VcfInfo.CPSR_PATHOGENICITY_SCORE)
-    util.add_vcf_header_entry(src_fh, constants.VcfInfo.CPSR_CLINVAR_CLASSIFICATION)
-    util.add_vcf_header_entry(src_fh, constants.VcfInfo.CPSR_CSQ)
+    util.add_vcf_header_entry(input_fh, constants.VcfInfo.CPSR_FINAL_CLASSIFICATION)
+    util.add_vcf_header_entry(input_fh, constants.VcfInfo.CPSR_PATHOGENICITY_SCORE)
+    util.add_vcf_header_entry(input_fh, constants.VcfInfo.CPSR_CLINVAR_CLASSIFICATION)
+    util.add_vcf_header_entry(input_fh, constants.VcfInfo.CPSR_CSQ)
 
-    out_fp = f'{sample_name}.annotations.vcf.gz'
-    out_fh = cyvcf2.Writer(out_fp, src_fh, 'wz')
+    output_fp = output_dir / f'{normal_name}.annotations.vcf.gz'
+    output_fh = cyvcf2.Writer(output_fp, input_fh, 'wz')
 
     # Transfer annotations and write to output
-    for record in src_fh:
+    for record in input_fh:
         # Do not process chrM since *snvs_indels.tiers.tsv does not include these annotations
         if record.CHROM == 'chrM':
             continue
         # Annotate and write
         # NOTE(SW): allow missing CPSR annotations for input variants, CPSR seems to drop some
         record_ann = annotate_record(record, cpsr_data, allow_missing=True)
-        out_fh.write_record(record_ann)
+        output_fh.write_record(record_ann)
 
 
 def check_annotation_headers(info_field_map, vcf_fp):

@@ -11,6 +11,7 @@ from ...common import pcgr
 
 @click.command(name='report')
 @click.pass_context
+
 @click.option('--normal_name', required=True, type=str)
 
 @click.option('--vcf_fp', required=True, type=click.Path(exists=True))
@@ -24,12 +25,18 @@ from ...common import pcgr
 
 @click.option('--threads', required=True, type=int, default=1)
 
+@click.option('--output_dir', required=True, type=click.Path())
+
 def entry(ctx, **kwargs):
     """Generate summary statistics and reports\f
     """
 
+    # Create output directory
+    output_dir = pathlib.Path(kwargs['output_dir'])
+    output_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
+
     # BCFtools stats
-    run_bcftool_stats(kwargs['vcf_unfiltered_fp'], kwargs['normal_name'])
+    run_bcftool_stats(kwargs['vcf_unfiltered_fp'], kwargs['normal_name'], output_dir)
 
     # Variant counts
     variant_counts_input = count_variants(kwargs['vcf_unfiltered_fp'])
@@ -40,7 +47,8 @@ def entry(ctx, **kwargs):
         'germline_predispose': variant_counts_processed,
     }
 
-    with open(f'{kwargs["normal_name"]}.germline.variant_counts.yaml', 'w') as fh:
+    variant_counts_output_fp = output_dir / f'{kwargs["normal_name"]}.germline.variant_counts.yaml'
+    with variant_counts_output_fp.open('w') as fh:
         count_output = {
             'id': 'umccr',
             'data': { kwargs['normal_name']: variant_count_data }
@@ -49,18 +57,19 @@ def entry(ctx, **kwargs):
 
 
     # CPSR report
-    vcf_norm_fp = split_multiallelic_records(kwargs['vcf_fp'])
+    vcf_norm_fp = split_multiallelic_records(kwargs['vcf_fp'], kwargs['normal_name'], output_dir)
 
     cpsr_prep_fp = pcgr.prepare_vcf_germline(
         vcf_norm_fp,
-        f'{kwargs["normal_name"]}.germline',
         kwargs['normal_name'],
+        output_dir,
     )
 
     cpsr_dir = pcgr.run_germline(
         cpsr_prep_fp,
         kwargs['germline_panel_list_fp'],
         kwargs['pcgr_data_dir'],
+        output_dir,
         threads=kwargs['threads'],
         pcgr_conda=kwargs['pcgr_conda'],
         pcgrr_conda=kwargs['pcgrr_conda'],
@@ -71,14 +80,18 @@ def entry(ctx, **kwargs):
         vcf_norm_fp,
         kwargs['normal_name'],
         cpsr_dir,
+        output_dir,
     )
 
 
-def run_bcftool_stats(vcf_fp, normal_name):
+def run_bcftool_stats(vcf_fp, normal_name, output_dir):
+    output_fp = output_dir / f'{normal_name}.germline.bcftools_stats.txt'
+
     command = fr'''
         bcftools stats -f PASS,. {vcf_fp} | \
-            sed '6 s#{vcf_fp}$#{normal_name}#' > {normal_name}.germline.bcftools_stats.txt
+            sed '6 s#{vcf_fp}$#{normal_name}#' > {output_fp}
     '''
+
     util.execute_command(command)
 
 
@@ -87,10 +100,12 @@ def count_variants(fp):
     return process.stdout.strip()
 
 
-def split_multiallelic_records(fp):
-    fp_out = pathlib.Path(fp).name.replace('.vcf.gz', '.norm.vcf.gz')
+def split_multiallelic_records(input_fp, normal_name, output_dir):
+    output_fp = output_dir / f'{normal_name}.norm.vcf.gz'
+
     command = fr'''
-        bcftools norm -m - -o {fp_out} {fp}
+        bcftools norm -m - -o {output_fp} {input_fp}
     '''
+
     util.execute_command(command)
-    return fp_out
+    return output_fp

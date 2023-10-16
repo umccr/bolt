@@ -11,6 +11,7 @@ from ...external import prioritize_sv
 @click.pass_context
 
 @click.option('--tumor_name', required=True, type=str)
+
 @click.option('--sv_vcf', required=True, type=click.Path(exists=True))
 
 @click.option('--refdata_known_fusion_pairs', required=True, type=click.Path(exists=True))
@@ -28,9 +29,11 @@ def entry(ctx, **kwargs):
     '''Prioritise SVs and CNVs\f
     '''
 
+    # Create output directory
     output_dir = pathlib.Path(kwargs['output_dir'])
     output_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
 
+    # Prioritise all variants
     prioritised_fp = output_dir / f'{kwargs["tumor_name"]}.prioritised.vcf'
     prioritize_sv.run(
         kwargs['sv_vcf'],
@@ -51,7 +54,7 @@ def entry(ctx, **kwargs):
     create_cnv_tsv(cnv_fp, kwargs['tumor_name'], output_dir)
 
 
-def create_sv_tsv(in_fp, tumor_name, output_dir):
+def create_sv_tsv(input_fp, tumor_name, output_dir):
 
     # NOTE(SW): the cancer report previously used Manta FORMAT/SR and FORMAT/PR as a diagnostic for
     # SV quality. However, GRIDSS handles read counts slightly different and has many measures of
@@ -79,12 +82,12 @@ def create_sv_tsv(in_fp, tumor_name, output_dir):
         'ALT',
     )
 
-    in_fh = cyvcf2.VCF(in_fp, samples=[tumor_name])
-    out_fh = (output_dir / f'{tumor_name}.sv.prioritised.tsv').open('w')
+    input_fh = cyvcf2.VCF(input_fp, samples=[tumor_name])
+    output_fh = (output_dir / f'{tumor_name}.sv.prioritised.tsv').open('w')
 
-    print(*header, sep='\t', file=out_fh)
+    print(*header, sep='\t', file=output_fh)
 
-    for record in in_fh:
+    for record in input_fh:
 
         if record.FILTER and 'INFERRED' in record.FILTER:
             purple_status = 'INFERRED'
@@ -115,13 +118,13 @@ def create_sv_tsv(in_fp, tumor_name, output_dir):
             record.ALT[0],
         )
 
-        print(*data, sep='\t', file=out_fh)
+        print(*data, sep='\t', file=output_fh)
 
 
-def create_cnv_tsv(in_fp, tumor_name, output_dir):
+def create_cnv_tsv(input_fp, tumor_name, output_dir):
 
-    in_fh = cyvcf2.VCF(in_fp, samples=[tumor_name])
-    out_fh = (output_dir / f'{tumor_name}.cnv.prioritised.tsv').open('w')
+    input_fh = cyvcf2.VCF(input_fp, samples=[tumor_name])
+    output_fh = (output_dir / f'{tumor_name}.cnv.prioritised.tsv').open('w')
 
     purple_fields = (
         'baf',
@@ -146,9 +149,9 @@ def create_cnv_tsv(in_fp, tumor_name, output_dir):
         'simple_ann',
     )
 
-    print(*header, sep='\t', file=out_fh)
+    print(*header, sep='\t', file=output_fh)
 
-    for record in in_fh:
+    for record in input_fh:
 
         purple_fields_data = list()
         for purple_field in purple_fields:
@@ -168,7 +171,7 @@ def create_cnv_tsv(in_fp, tumor_name, output_dir):
 
         )
 
-        print(*data, sep='\t', file=out_fh)
+        print(*data, sep='\t', file=output_fh)
 
 
 def parse_info_field(record, field_name):
@@ -189,7 +192,7 @@ def parse_read_support_field(record, field_name):
         return str()
 
 
-def split_records(in_fp, tumor_name, output_dir, variant_type):
+def split_records(input_fp, tumor_name, output_dir, variant_type):
     if variant_type == 'sv':
         source = 'sv_gridss'
     elif variant_type == 'cnv':
@@ -197,11 +200,11 @@ def split_records(in_fp, tumor_name, output_dir, variant_type):
     else:
         assert False
 
-    out_fp = output_dir / f'{tumor_name}.{variant_type}.prioritised.vcf.gz'
+    output_fp = output_dir / f'{tumor_name}.{variant_type}.prioritised.vcf.gz'
     command = fr'''
-        bcftools view -i 'SOURCE="{source}"' {in_fp} | \
-            bcftools annotate -x 'INFO/SOURCE' -o {out_fp}
+        bcftools view -i 'SOURCE="{source}"' {input_fp} | \
+            bcftools annotate -x 'INFO/SOURCE' -o {output_fp}
     '''
     util.execute_command(command)
 
-    return out_fp
+    return output_fp

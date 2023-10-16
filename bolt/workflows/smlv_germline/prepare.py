@@ -11,9 +11,13 @@ from ...common import constants
 
 @click.command(name='prepare')
 @click.pass_context
+
 @click.option('--vcf_fp', required=True, type=click.Path(exists=True))
+
 @click.option('--gene_panel_fp', required=True, type=click.Path(exists=True))
+
 @click.option('--output_fp', required=True, type=click.Path())
+
 def entry(ctx, **kwargs):
     '''Prepare germline variants for processing\f
 

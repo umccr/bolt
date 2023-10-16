@@ -13,6 +13,7 @@ from ...common import pcgr
 
 @click.command(name='report')
 @click.pass_context
+
 @click.option('--tumor_name', required=True, type=str)
 @click.option('--normal_name', required=True, type=str)
 
@@ -31,21 +32,28 @@ from ...common import pcgr
 
 @click.option('--threads', required=True, type=int, default=1)
 
+@click.option('--output_dir', required=True, type=click.Path())
+
 def entry(ctx, **kwargs):
     """Generate summary statistics and reports\f
     """
 
+    # Create output directory
+    output_dir = pathlib.Path(kwargs['output_dir'])
+    output_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
+
     # BCFtools stats
-    bcftools_vcf_fp = bcftools_stats_prepare(kwargs['vcf_fp'], kwargs['tumor_name'])
-    run_bcftools_stats(bcftools_vcf_fp, kwargs['tumor_name'])
+    bcftools_vcf_fp = bcftools_stats_prepare(kwargs['vcf_fp'], kwargs['tumor_name'], output_dir)
+    run_bcftools_stats(bcftools_vcf_fp, kwargs['tumor_name'], output_dir)
 
     # Allele frequencies
     allele_frequencies(
-        kwargs['tumor_name'],
         kwargs['vcf_fp'],
+        kwargs['tumor_name'],
         kwargs['cancer_genes_fp'],
         kwargs['giab_regions_fp'],
         kwargs['genome_fp'],
+        output_dir,
     )
 
     # Variant counts
@@ -74,7 +82,8 @@ def entry(ctx, **kwargs):
         'filt_others': variant_count_proportions['others'],
     }
 
-    with open(f'{kwargs["tumor_name"]}.somatic.variant_counts.yaml', 'w') as fh:
+    variant_counts_output_fp = output_dir / f'{kwargs["tumor_name"]}.somatic.variant_counts.yaml'
+    with variant_counts_output_fp.open('w') as fh:
         count_output = {
             'id': 'umccr',
             'data': { kwargs['tumor_name']: variant_count_data }
@@ -86,14 +95,15 @@ def entry(ctx, **kwargs):
 
     pcgr_prep_fp = pcgr.prepare_vcf_somatic(
         kwargs['vcf_fp'],
-        f'{kwargs["tumor_name"]}.somatic',
         kwargs['tumor_name'],
         kwargs['normal_name'],
+        output_dir,
     )
 
     pcgr.run_somatic(
         pcgr_prep_fp,
         kwargs['pcgr_data_dir'],
+        output_dir,
         threads=kwargs['threads'],
         pcgr_conda=kwargs['pcgr_conda'],
         pcgrr_conda=kwargs['pcgrr_conda'],
@@ -103,27 +113,14 @@ def entry(ctx, **kwargs):
     )
 
 
-def parse_purple_purity_file(fp):
-    with open(fp, 'r') as fh:
-        entries = list(csv.DictReader(fh, delimiter='\t'))
-    assert len(entries) == 1
-    [entry] = entries
+def bcftools_stats_prepare(input_fp, tumor_name, output_dir):
+    input_fh = cyvcf2.VCF(input_fp)
 
-    data = {
-        'purity': entry['purity'],
-        'ploidy': entry['ploidy'],
-    }
-    return data
+    output_fp = f'{tumor_name}.somatic.bcftools_stats.vcf.gz'
+    output_fh = cyvcf2.Writer(output_fp, input_fh, 'wz')
 
-
-def bcftools_stats_prepare(in_fp, tumor_name):
-    in_fh = cyvcf2.VCF(in_fp)
-
-    out_fp = f'{tumor_name}.somatic.bcftools_stats.vcf.gz'
-    out_fh = cyvcf2.Writer(out_fp, in_fh, 'wz')
-
-    tumor_index = in_fh.samples.index(tumor_name)
-    for record in in_fh:
+    tumor_index = input_fh.samples.index(tumor_name)
+    for record in input_fh:
         # NOTE(SW): SAGE and DRAGEN quality scores are not comparable; we only get stats of DRAGEN
         # FORMAT/SQ
         if (tumor_sq_value := record.format('SQ')) is not None:
@@ -133,16 +130,41 @@ def bcftools_stats_prepare(in_fp, tumor_name):
         else:
             assert False
 
-        out_fh.write_record(record)
+        output_fh.write_record(record)
 
-    return out_fp
+    return output_fp
 
 
-def run_bcftools_stats(vcf_fp, tumor_name):
+def run_bcftools_stats(input_fp, tumor_name, output_dir):
+    output_fp = output_dir / f'{tumor_name}.somatic.bcftools_stats.txt'
     command = fr'''
-        bcftools stats {vcf_fp} | \
-            sed '6 s/{vcf_fp}$/{tumor_name}/' > {tumor_name}.somatic.bcftools_stats.txt
+        bcftools stats {input_fp} | \
+            sed '6 s/{input_fp}$/{tumor_name}/' > {output_fp}
     '''
+    util.execute_command(command)
+
+
+def allele_frequencies(input_fp, tumor_name, cancer_genes_fp, giab_regions_fp, genome_fp, output_dir):
+    af_vcf_fp = output_dir / 'af_variants.vcf.gz'
+    af_global_output_fp = output_dir / 'af_tumor.txt'
+    af_keygenes_output_fp = output_dir / 'af_tumor_keygenes.txt'
+
+    command = fr'''
+        bcftools annotate -Ob -x 'INFO' {input_fp} | \
+            bcftools view -Ob -s {tumor_name} -T <(gzip -cd {giab_regions_fp}) | \
+            bcftools norm -Ob -m - -f {genome_fp} | \
+            bcftools sort -o {af_vcf_fp}
+
+        {{ echo af; bcftools query -f '[%AF]\n' {af_vcf_fp}; }} > {af_global_output_fp}
+
+        {{
+            echo -e 'chrom\tpos\tid\tref\talt\taf';
+            bcftools view -f .,PASS {af_vcf_fp} | \
+                bedtools intersect -a - -b {cancer_genes_fp} -header | \
+                bcftools query -f '%CHROM\t%POS\t%ID\t%REF\t%ALT\t[%AF]\n';
+        }} > {af_keygenes_output_fp}
+    '''
+
     util.execute_command(command)
 
 
@@ -177,21 +199,14 @@ def count_variant_types(vcf_fp):
     return counts
 
 
-def allele_frequencies(tumor_name, vcf_fp, cancer_genes_fp, giab_regions_fp, genome_fp):
-    command = fr'''
-        bcftools annotate -Ob -x 'INFO' {vcf_fp} | \
-            bcftools view -Ob -s {tumor_name} -T <(gzip -cd {giab_regions_fp}) | \
-            bcftools norm -Ob -m - -f {genome_fp} | \
-            bcftools sort -o af_variants.vcf.gz
+def parse_purple_purity_file(fp):
+    with open(fp, 'r') as fh:
+        entries = list(csv.DictReader(fh, delimiter='\t'))
+    assert len(entries) == 1
+    [entry] = entries
 
-        {{ echo af; bcftools query -f '[%AF]\n' af_variants.vcf.gz; }} > af_tumor.txt
-
-        {{
-            echo -e 'chrom\tpos\tid\tref\talt\taf';
-            bcftools view -f .,PASS af_variants.vcf.gz | \
-                bedtools intersect -a - -b {cancer_genes_fp} -header | \
-                bcftools query -f '%CHROM\t%POS\t%ID\t%REF\t%ALT\t[%AF]\n';
-        }} > af_tumor_keygenes.txt
-    '''
-
-    util.execute_command(command)
+    data = {
+        'purity': entry['purity'],
+        'ploidy': entry['ploidy'],
+    }
+    return data

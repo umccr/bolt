@@ -10,12 +10,14 @@ from ... import util
 
 @click.command(name='multiqc_report')
 @click.pass_context
+
 @click.option('--tumor_name', required=True, type=str)
 @click.option('--normal_name', required=True, type=str)
 
 @click.option('--input_dir', required=True, type=click.Path(exists=True))
 
 @click.option('--output_dir', required=True, type=click.Path())
+
 def entry(ctx, **kwargs):
     '''Generate MultiQC report\f
     '''
