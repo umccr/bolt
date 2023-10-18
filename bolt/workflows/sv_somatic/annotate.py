@@ -85,7 +85,6 @@ def compile_variants(sv_fp, cnv_fp, tumor_name, ref_fp, output_dir):
     with pathlib.Path(cnv_fp).open('r') as fh:
         for record in csv.DictReader(fh, delimiter='\t'):
 
-            fields = ('start', 'end', 'copyNumber')
             cn = float(record['copyNumber'])
 
             if cn >= 2.05:

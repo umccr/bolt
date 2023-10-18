@@ -41,7 +41,6 @@ def create_clis():
     clis = list()
 
     workflow_dir = pathlib.Path(__file__).parent
-    workflow_fps = [fp for fp in workflow_dir.glob('*') if fp.name != 'cli.py']
 
     for fp in workflow_dir.glob('*'):
         if not fp.is_dir() or fp.name == '__pycache__':

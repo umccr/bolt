@@ -1,5 +1,6 @@
 import pathlib
 import subprocess
+import sys
 import textwrap
 
 
@@ -30,7 +31,7 @@ def execute_command(command):
     if process.returncode != 0:
         print(process)
         print(process.stderr)
-        exit(1)
+        sys.exit(1)
 
     return process
 
