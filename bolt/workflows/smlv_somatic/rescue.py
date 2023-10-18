@@ -142,7 +142,7 @@ def annotate_existing_sage_calls(input_fp, tumor_name, sage_vcf_fp, output_dir):
                 record.FILTER = 'PASS'
                 record.INFO[constants.VcfInfo.SAGE_RESCUE.value] = True
         else:
-            record.FILTER = ';'.join([*record.FILTERS, constants.VcfInfo.SAGE_LOWCONF.value])
+            record.FILTER = ';'.join([*record.FILTERS, constants.VcfFilter.SAGE_LOWCONF.value])
 
         # NOTE(SW): previously in Umccrise, the FORMAT/AD and FORMAT/DP from SAGE calls were just used
         # to overwrite bcbio/DRAGEN equivalents but other data such as FORMAT/AF were not updated.
