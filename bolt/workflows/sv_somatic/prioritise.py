@@ -91,7 +91,7 @@ def create_sv_tsv(input_fp, tumor_name, output_dir):
 
         if record.FILTER and 'INFERRED' in record.FILTER:
             purple_status = 'INFERRED'
-        elif record.INFO.get('RECOVERED'):
+        elif record.INFO.get('RECOVERED') is not None:
             purple_status = 'RECOVERED'
         else:
             purple_status = ''
