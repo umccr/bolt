@@ -1,4 +1,5 @@
 import csv
+import json
 import pathlib
 
 
@@ -8,6 +9,7 @@ import yaml
 
 
 from ... import util
+from ...common import constants
 from ...common import pcgr
 
 
@@ -56,39 +58,50 @@ def entry(ctx, **kwargs):
         output_dir,
     )
 
-    # Variant counts
-    variant_counts_input = count_variant_types(kwargs['vcf_unfiltered_fp'])
-    variant_counts_processed = count_variant_types(kwargs['vcf_fp'])
+    # Variant type counts
+    # NOTE(SW): this is intended to preserve counts in the MultiQC report
+    variant_counts_types_input = count_variant_types(kwargs['vcf_unfiltered_fp'])
+    variant_counts_types_processed = count_variant_types(kwargs['vcf_fp'])
 
     # NOTE(SW): using pass variants only for now
 
-    variant_count_proportions = dict()
-    for k in {*variant_counts_input['pass'], *variant_counts_processed['pass']}:
-        assert k not in variant_count_proportions
-        if (count_input := variant_counts_input['pass'][k]) == 0:
-            variant_count_proportions[k] = 0
-        elif (count_processed := variant_counts_processed['pass'][k]) == 0:
-            variant_count_proportions[k] = 0
+    variant_count_type_proportions = dict()
+    for k in {*variant_counts_types_input['pass'], *variant_counts_types_processed['pass']}:
+        assert k not in variant_count_type_proportions
+        if (count_input := variant_counts_types_input['pass'][k]) == 0:
+            variant_count_type_proportions[k] = 0
+        elif (count_processed := variant_counts_types_processed['pass'][k]) == 0:
+            variant_count_type_proportions[k] = 0
         else:
-            variant_count_proportions[k] = (count_input - count_processed) / count_input * 100
+            variant_count_type_proportions[k] = (count_input - count_processed) / count_input * 100
 
     variant_count_data = {
-        'snps': variant_counts_processed['pass']['snps'],
-        'indels': variant_counts_processed['pass']['indels'],
-        'others': variant_counts_processed['pass']['others'],
-        'filt_vars': variant_count_proportions['total'],
-        'filt_snps': variant_count_proportions['snps'],
-        'filt_indels': variant_count_proportions['indels'],
-        'filt_others': variant_count_proportions['others'],
+        'snps': variant_counts_types_processed['pass']['snps'],
+        'indels': variant_counts_types_processed['pass']['indels'],
+        'others': variant_counts_types_processed['pass']['others'],
+        'filt_vars': variant_count_type_proportions['total'],
+        'filt_snps': variant_count_type_proportions['snps'],
+        'filt_indels': variant_count_type_proportions['indels'],
+        'filt_others': variant_count_type_proportions['others'],
     }
 
-    variant_counts_output_fp = output_dir / f'{kwargs["tumor_name"]}.somatic.variant_counts.yaml'
-    with variant_counts_output_fp.open('w') as fh:
+    variant_counts_type_output_fn = f'{kwargs["tumor_name"]}.somatic.variant_counts.yaml'
+    variant_counts_type_output_fp = output_dir / variant_counts_type_output_fn
+    with variant_counts_type_output_fp.open('w') as fh:
         count_output = {
             'id': 'umccr',
             'data': { kwargs['tumor_name']: variant_count_data }
         }
         yaml.dump(count_output, fh, default_flow_style=False)
+
+    # Variant processing counts
+    # NOTE(SW): this is intended to preserve counts in the Cancer Report
+    variant_counts_processing = count_variant_processing(kwargs['vcf_fp'])
+    variant_counts_processing_fn = f'{kwargs["tumor_name"]}.somatic.variant_counts_processing.yaml'
+    variant_counts_processing_fp = output_dir / variant_counts_processing_fn
+    with variant_counts_processing_fp.open('w') as fh:
+        json.dump(counts, fh, indent=4)
+        fh.write('\n')
 
     # PCGR report
     purple_data = parse_purple_purity_file(kwargs['purple_purity_fp'])
@@ -195,6 +208,81 @@ def count_variant_types(vcf_fp):
     for variant_filter, data in counts.items():
         total = sum(v for v in data.values())
         counts[variant_filter]['total'] = total
+
+    return counts
+
+
+def count_variant_processing(vcf_fp):
+    # Set filter groups
+    sage_add_info = {
+        constants.VcfInfo.SAGE_RESCUE.value,
+        constants.VcfInfo.SAGE_NOVEL.value,
+    }
+
+    bolt_annotation_filters = {
+        constants.VcfFilter.MAX_VARIANTS_NON_PASS.value,
+        constants.VcfFilter.MAX_VARIANTS_GNOMAD.value,
+        constants.VcfFilter.MAX_VARIANTS_NON_CANCER_GENES.value,
+    }
+
+    # NOTE(SW): this assumes both all and /only/ bolt filters are defined in constants.VcfFilter
+    bolt_filters = {f.value for f in constants.VcfFilter} - bolt_annotation_filters
+
+    # Count table
+    counts = {
+        'dragen': 0,
+        'sage': 0,
+        'annotated': 0,
+        'filter_pass': 0,
+    }
+
+    for record in cyvcf2.VCF(vcf_fp):
+
+        # Restore existing filters to get accurate DRAGEN counts with rescued variants
+        rescued_filters = record.INFO.get(constants.VcfInfo.RESCUED_FILTERS_EXISTING.value)
+        if rescued_filters:
+            assert not record.FILTER
+            record.FILTER = rescued_filters.replace(',', ';')
+
+        # Separate filters into useful groups
+        record_filters_dragen = list()
+        record_filters_bolt = list()
+        record_filters_bolt_annotation = list()
+
+        for filter_str in record.FILTERS:
+
+            if filter_str == 'PASS':
+                continue
+            elif filter_str in bolt_annotation_filters:
+                record_filters_bolt_annotation.append(filter_str)
+            elif filter_str in bolt_filters:
+                record_filters_bolt.append(filter_str)
+            else:
+                record_filters_dragen.append(filter_str)
+
+        # Ensure no FILTERs for annotation 'max variants' have been missed
+        assert not any(f.startswith('max_variants_') for f in record_filters_bolt)
+
+        # Begin counting
+        # All DRAGEN variants are passed to SAGE
+        counts['dragen'] += 1
+        counts['sage'] += 1
+
+        # SAGE will exclude variants if they are not recalled with passing filters
+        if constants.VcfFilter.SAGE_LOWCONF.value in record_filters_bolt:
+            counts['sage'] -= 1
+
+        # SAGE rescues
+        if any(record.INFO.get(e) is not None for e in sage_add_info):
+            counts['sage'] += 1
+
+        # Variants are selected for annotation when many are present
+        if not record_filters_bolt_annotation:
+            counts['annotated'] += 1
+
+        # Filtering removes and rescues
+        if not record.FILTER or rescued_filters:
+            counts['filter_pass'] += 1
 
     return counts
 
