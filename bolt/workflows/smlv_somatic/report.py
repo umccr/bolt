@@ -129,7 +129,7 @@ def entry(ctx, **kwargs):
 def bcftools_stats_prepare(input_fp, tumor_name, output_dir):
     input_fh = cyvcf2.VCF(input_fp)
 
-    output_fp = f'{tumor_name}.somatic.bcftools_stats.vcf.gz'
+    output_fp = output_dir / f'{tumor_name}.somatic.bcftools_stats.vcf.gz'
     output_fh = cyvcf2.Writer(output_fp, input_fh, 'wz')
 
     tumor_index = input_fh.samples.index(tumor_name)
