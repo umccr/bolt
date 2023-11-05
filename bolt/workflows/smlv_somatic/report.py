@@ -152,7 +152,7 @@ def run_bcftools_stats(input_fp, tumor_name, output_dir):
     output_fp = output_dir / f'{tumor_name}.somatic.bcftools_stats.txt'
     command = fr'''
         bcftools stats {input_fp} | \
-            sed '6 s/{input_fp}$/{tumor_name}/' > {output_fp}
+            sed '6 s#{input_fp}$#{tumor_name}#' > {output_fp}
     '''
     util.execute_command(command)
 
