@@ -47,7 +47,7 @@ def entry(ctx, **kwargs):
         'germline_predispose': variant_counts_processed,
     }
 
-    variant_counts_output_fp = output_dir / f'{kwargs["normal_name"]}.germline.variant_counts.yaml'
+    variant_counts_output_fp = output_dir / f'{kwargs["normal_name"]}.germline.variant_counts_type.yaml'
     with variant_counts_output_fp.open('w') as fh:
         count_output = {
             'id': 'umccr',
