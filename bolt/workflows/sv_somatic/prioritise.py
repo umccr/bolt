@@ -61,8 +61,6 @@ def create_sv_tsv(input_fp, tumor_name, output_dir):
     # various read support/non-support. For now I am using FORMAT/SR and FORMAT/RP.
 
     header = (
-        'caller',
-        'sample',
         'chrom',
         'start',
         'svtype',
@@ -97,9 +95,7 @@ def create_sv_tsv(input_fp, tumor_name, output_dir):
             purple_status = ''
 
         data = (
-            'gridss',
-            tumor_name,
-            record.CHROM,
+            record.CHROM.replace('chr', ''),
             record.POS,
             record.INFO.get('EVENTTYPE', ''),
             parse_read_support_field(record, 'SR'),
