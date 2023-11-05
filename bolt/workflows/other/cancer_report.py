@@ -17,6 +17,7 @@ from ... import util
 @click.option('--af_keygenes_fp', required=True, type=click.Path(exists=True))
 
 @click.option('--smlv_somatic_vcf_fp', required=True, type=click.Path(exists=True))
+@click.option('--smlv_somatic_counts_process_fp', required=True, type=click.Path(exists=True))
 
 @click.option('--sv_somatic_tsv_fp', required=True, type=click.Path(exists=True))
 @click.option('--sv_somatic_vcf_fp', required=True, type=click.Path(exists=True))
@@ -68,6 +69,7 @@ def entry(ctx, **kwargs):
             --af_keygenes {kwargs['af_keygenes_fp']} \
             \
             --somatic_snv_vcf {decomposed_snv_vcf} \
+            --somatic_snv_summary {kwargs['smlv_somatic_counts_process_fp']} \
             \
             --somatic_sv_tsv {kwargs['sv_somatic_tsv_fp']} \
             --somatic_sv_vcf {kwargs['sv_somatic_vcf_fp']} \
