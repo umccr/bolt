@@ -20,7 +20,8 @@ from ...common import pcgr
 @click.option('--normal_name', required=True, type=str)
 
 @click.option('--vcf_fp', required=True, type=click.Path(exists=True))
-@click.option('--vcf_unfiltered_fp', required=True, type=click.Path(exists=True))
+@click.option('--vcf_filters_fp', required=True, type=click.Path(exists=True))
+@click.option('--vcf_dragen_fp', required=True, type=click.Path(exists=True))
 
 @click.option('--pcgr_conda', required=False, type=str)
 @click.option('--pcgrr_conda', required=False, type=str)
@@ -60,32 +61,32 @@ def entry(ctx, **kwargs):
 
     # Variant type counts
     # NOTE(SW): this is intended to preserve counts in the MultiQC report
-    variant_counts_types_input = count_variant_types(kwargs['vcf_unfiltered_fp'])
-    variant_counts_types_processed = count_variant_types(kwargs['vcf_fp'])
+    variant_counts_types_dragen = count_variant_types(kwargs['vcf_dragen_fp'])
+    variant_counts_types_bolt= count_variant_types(kwargs['vcf_fp'])
 
     # NOTE(SW): using pass variants only for now
 
     variant_count_type_proportions = dict()
-    for k in {*variant_counts_types_input['pass'], *variant_counts_types_processed['pass']}:
+    for k in {*variant_counts_types_dragen['pass'], *variant_counts_types_bolt['pass']}:
         assert k not in variant_count_type_proportions
-        if (count_input := variant_counts_types_input['pass'][k]) == 0:
+        if (count_dragen := variant_counts_types_dragen['pass'][k]) == 0:
             variant_count_type_proportions[k] = 0
-        elif (count_processed := variant_counts_types_processed['pass'][k]) == 0:
+        elif (count_bolt := variant_counts_types_bolt['pass'][k]) == 0:
             variant_count_type_proportions[k] = 0
         else:
-            variant_count_type_proportions[k] = (count_input - count_processed) / count_input * 100
+            variant_count_type_proportions[k] = (count_dragen - count_bolt) / count_dragen * 100
 
     variant_count_data = {
-        'snps': variant_counts_types_processed['pass']['snps'],
-        'indels': variant_counts_types_processed['pass']['indels'],
-        'others': variant_counts_types_processed['pass']['others'],
+        'snps': variant_counts_types_bolt['pass']['snps'],
+        'indels': variant_counts_types_bolt['pass']['indels'],
+        'others': variant_counts_types_bolt['pass']['others'],
         'filt_vars': variant_count_type_proportions['total'],
         'filt_snps': variant_count_type_proportions['snps'],
         'filt_indels': variant_count_type_proportions['indels'],
         'filt_others': variant_count_type_proportions['others'],
     }
 
-    variant_counts_type_output_fn = f'{kwargs["tumor_name"]}.somatic.variant_counts.yaml'
+    variant_counts_type_output_fn = f'{kwargs["tumor_name"]}.somatic.variant_counts_type.yaml'
     variant_counts_type_output_fp = output_dir / variant_counts_type_output_fn
     with variant_counts_type_output_fp.open('w') as fh:
         count_output = {
@@ -94,13 +95,13 @@ def entry(ctx, **kwargs):
         }
         yaml.dump(count_output, fh, default_flow_style=False)
 
-    # Variant processing counts
+    # Variant process counts
     # NOTE(SW): this is intended to preserve counts in the Cancer Report
-    variant_counts_processing = count_variant_processing(kwargs['vcf_fp'])
-    variant_counts_processing_fn = f'{kwargs["tumor_name"]}.somatic.variant_counts_processing.yaml'
-    variant_counts_processing_fp = output_dir / variant_counts_processing_fn
-    with variant_counts_processing_fp.open('w') as fh:
-        json.dump(counts, fh, indent=4)
+    variant_counts_process = count_variant_process(kwargs['vcf_filters_fp'])
+    variant_counts_process_fn = f'{kwargs["tumor_name"]}.somatic.variant_counts_process.json'
+    variant_counts_process_fp = output_dir / variant_counts_process_fn
+    with variant_counts_process_fp.open('w') as fh:
+        json.dump(variant_counts_process, fh, indent=4)
         fh.write('\n')
 
     # PCGR report
@@ -212,7 +213,7 @@ def count_variant_types(vcf_fp):
     return counts
 
 
-def count_variant_processing(vcf_fp):
+def count_variant_process(vcf_fp):
     # Set filter groups
     sage_add_info = {
         constants.VcfInfo.SAGE_RESCUE.value,
