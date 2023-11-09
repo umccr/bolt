@@ -265,19 +265,14 @@ def count_variant_process(vcf_fp):
         assert not any(f.startswith('max_variants_') for f in record_filters_bolt)
 
         # Begin counting
+        # Do not include novel SAGE calls in DRAGEN counts
+        if record.INFO.get(constants.VcfInfo.SAGE_NOVEL.value) is None:
+            counts['dragen'] += 1
+
         # All DRAGEN variants are passed to SAGE
-        counts['dragen'] += 1
         counts['sage'] += 1
 
-        # SAGE will exclude variants if they are not recalled with passing filters
-        if constants.VcfFilter.SAGE_LOWCONF.value in record_filters_bolt:
-            counts['sage'] -= 1
-
-        # SAGE rescues
-        if any(record.INFO.get(e) is not None for e in sage_add_info):
-            counts['sage'] += 1
-
-        # Variants are selected for annotation when many are present
+        # Variants can be excluded for annotation when there are too many present
         if not record_filters_bolt_annotation:
             counts['annotated'] += 1
 
