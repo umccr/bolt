@@ -29,6 +29,7 @@ from ... import util
 @click.option('--virusbreakend_dir', required=True, type=click.Path(exists=True))
 
 @click.option('--cancer_genes_fp', required=True, type=click.Path(exists=True))
+@click.option('--oncokb_genes_fp', required=True, type=click.Path(exists=True))
 
 @click.option('--output_dir', required=True, type=click.Path())
 
@@ -85,6 +86,7 @@ def entry(ctx, **kwargs):
             --virusbreakend_vcf {kwargs['virusbreakend_dir']}/{kwargs['tumor_name']}.virusbreakend.vcf \
             \
             --key_genes {kwargs['cancer_genes_fp']} \
+            --oncokb_genes {kwargs['oncokb_genes_fp']} \
             \
             --img_dir {output_image_dir}/ \
             --result_outdir {output_table_dir}/ \
