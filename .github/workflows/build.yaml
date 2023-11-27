@@ -1,0 +1,34 @@
+name: Build
+on:
+  push:
+    tags: [ 'v*.*.*' ]
+
+jobs:
+  docker_build:
+    name: Docker build
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    strategy:
+      matrix:
+        build_name: ['base', 'circos', 'gpgr', 'multiqc', 'pcgr', 'snpeff']
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build image
+        run: |
+          if [[ "${{ matrix.build_name }}" == "base" ]]; then
+            docker_tag=bolt:${GITHUB_REF_NAME#v};
+            dockerfile_fn=Dockerfile;
+          else
+            docker_tag=bolt:${GITHUB_REF_NAME#v}-${{ matrix.build_name }};
+            dockerfile_fn=Dockerfile.${{ matrix.build_name }};
+          fi;
+          docker build --push -f docker/${dockerfile_fn} -t ghcr.io/${{ github.repository_owner }}/${docker_tag} .;
