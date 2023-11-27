@@ -1,0 +1,50 @@
+FROM continuumio/miniconda3:23.5.2-0-alpine as build
+
+RUN \
+  conda install conda-libmamba-solver
+
+RUN \
+  echo -e > ~/.condarc '\
+solver: libmamba\n\
+channels:\n\
+  - conda-forge\n\
+  - bioconda\n\
+  - defaults'
+
+COPY ./conda/env/bolt_env.yml /tmp/
+RUN \
+  conda env update --prefix /env/ --file /tmp/bolt_env.yml
+
+RUN \
+  conda install --prefix /env/ \
+    'circos ==0.69.9' \
+    'perl-gd ==2.76'
+
+COPY ./ /tmp/bolt/
+RUN \
+  conda run --prefix /env/ pip install --no-deps /tmp/bolt/
+
+RUN \
+  conda install --prefix /env/ bash
+
+FROM gcr.io/distroless/base-debian11:latest
+
+COPY --from=build /env/ /env/
+
+# Copy BusyBox binaries; Nextflow uses /bin/bash to execute process shell code
+COPY --from=busybox:1.35.0-uclibc /bin/ /bin/
+COPY --from=build /env/bin/bash /bin/
+
+# Copy 'env' to location required by circos
+COPY --from=busybox:1.35.0-uclibc /bin/env /usr/bin/
+
+# OpenSSL v1.0 library required for Perl, usually available through system; Conda env from above
+# contains OpenSSL v3
+COPY --from=build /usr/glibc-compat/lib/libcrypt.so.1 /env/lib/
+
+# Copy Conda env
+COPY --from=build /env/ /env/
+
+ENV PATH="/env/bin:${PATH}"
+ENV LD_LIBRARY_PATH="/env/lib/:${LD_LIBRARY_PATH}"
+ENV PERL5LIB="${PERL5LIB}:/env/lib/perl5/5.32/site_perl:/env/lib/perl5/site_perl:/env/lib/perl5/vendor_perl:/env/lib/perl5/5.32/vendor_perl"

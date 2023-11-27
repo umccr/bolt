@@ -1,0 +1,62 @@
+FROM continuumio/miniconda3:23.5.2-0-alpine as build
+
+RUN \
+  conda install conda-libmamba-solver
+
+RUN \
+  echo -e > ~/.condarc '\
+solver: libmamba\n\
+channels:\n\
+  - conda-forge\n\
+  - bioconda\n\
+  - defaults'
+
+RUN \
+  conda create \
+    --solver libmamba \
+    --name pcgr \
+    --file https://raw.githubusercontent.com/sigven/pcgr/v1.4.1/conda/env/lock/pcgr-linux-64.lock
+
+RUN \
+  conda create \
+    --solver libmamba \
+    --name pcgrr \
+    --file https://raw.githubusercontent.com/sigven/pcgr/v1.4.1/conda/env/lock/pcgrr-linux-64.lock
+
+COPY ./conda/env/bolt_env.yml /tmp/
+RUN \
+  conda env update --file /tmp/bolt_env.yml
+
+COPY ./ /tmp/bolt/
+RUN \
+  conda run --name bolt pip install --no-deps /tmp/bolt/
+
+RUN \
+  conda install bash
+
+# NOTE(SW): must take Conda install across to distroless, hence the prior clean
+
+RUN \
+  conda clean -afy
+
+FROM gcr.io/distroless/base-debian11:latest
+
+# Copy BusyBox binaries; Nextflow uses /bin/bash to execute process shell code
+COPY --from=busybox:1.35.0-uclibc /bin/ /bin/
+COPY --from=build /opt/conda/bin/bash /bin/
+
+# R seemingly requires /usr/bin/which
+COPY --from=busybox:1.35.0-uclibc /bin/which /usr/bin/
+
+# OpenSSL v1.0 library required for Perl (dependency of vep), usually available through system;
+# Conda env from above contains OpenSSL v3
+COPY --from=build /usr/glibc-compat/lib/libcrypt.so.1 /opt/conda/lib/
+
+# Copy 'env' to the location required by vep
+COPY --from=busybox:1.35.0-uclibc /bin/env /usr/bin/
+
+# Copy Conda install and environments
+COPY --from=build /opt/conda/ /opt/conda/
+
+ENV PATH="/opt/conda/envs/bolt/bin:/opt/conda/bin:${PATH}"
+ENV LD_LIBRARY_PATH="/opt/conda/lib/:${LD_LIBRARY_PATH}"

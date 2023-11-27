@@ -1,0 +1,56 @@
+FROM continuumio/miniconda3:23.5.2-0-alpine as build
+
+RUN \
+  conda install conda-libmamba-solver
+
+RUN \
+  echo -e > ~/.condarc '\
+solver: libmamba\n\
+channels:\n\
+  - conda-forge\n\
+  - bioconda\n\
+  - defaults'
+
+COPY ./conda/env/bolt_env.yml /tmp/
+RUN \
+  conda env update --prefix /env/ --file /tmp/bolt_env.yml
+
+RUN \
+  conda install --prefix /env/ \
+    'r-gpgr ==1.4.3' \
+    'r-sigrap ==0.0.4' \
+    'bioconductor-bsgenome.hsapiens.ucsc.hg38 ==1.4.4' \
+    'bioconductor-txdb.hsapiens.ucsc.hg38.knowngene ==3.14.0' \
+    'bioconductor-genomeinfodbdata ==1.2.7'
+
+RUN \
+  conda install git
+
+RUN \
+  git clone -b oncoanalyser-sash-inputs https://github.com/scwatts/gpgr_sash /tmp/gpgr/ && \
+  conda run --prefix /env/ R CMD INSTALL --build /tmp/gpgr/
+
+COPY ./ /tmp/bolt/
+RUN \
+  conda run --prefix /env/ pip install --no-deps /tmp/bolt/
+
+RUN \
+  conda install --prefix /env/ bash
+
+FROM gcr.io/distroless/base-debian11:latest
+
+# Copy BusyBox binaries; Nextflow uses /bin/bash to execute process shell code
+COPY --from=busybox:1.35.0-uclibc /bin/ /bin/
+COPY --from=build /env/bin/bash /bin/
+
+# R seemingly requires /usr/bin/which
+COPY --from=busybox:1.35.0-uclibc /bin/which /usr/bin/
+
+# Copy 'env' to the location required by gpgr.R
+COPY --from=busybox:1.35.0-uclibc /bin/env /usr/bin/
+
+# Copy Conda env
+COPY --from=build /env/ /env/
+
+ENV PATH="/env/bin:${PATH}"
+ENV LD_LIBRARY_PATH="/env/lib/:${LD_LIBRARY_PATH}"
