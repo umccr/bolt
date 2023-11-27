@@ -480,24 +480,6 @@ def annotate_exon_loss(exon_loss_anno_by_tid, prioritised_genes):
 
 
 # NOTE(SW): below functions from ngs_util
-def set_locale():
-    import locale
-    try:
-        if 'UTF-8' not in locale.getlocale(locale.LC_ALL):
-            try:
-                locale.setlocale(locale.LC_ALL, 'en_AU.UTF-8')
-            except locale.Error:
-                locale.setlocale(locale.LC_ALL, 'C.UTF-8')
-            var = '.'.join(locale.getlocale(locale.LC_ALL))
-            os.environ['LC_ALL'] = os.environ['LANG'] = var
-    except TypeError:
-        pass
-
-
-set_locale()
-
-
-
 def add_cyvcf2_hdr(vcf, id, number, type, descr, new_header=None, hdr='INFO'):
     if new_header:
         new_header.append(f'##{hdr}=<ID={id},Number={number},Type={type},Description="{descr}">')
