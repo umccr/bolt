@@ -1,0 +1,24 @@
+name: Test
+on:
+  push:
+    branches:
+      - '**'
+
+jobs:
+  python_tests:
+    name: Python tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash -el {0}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Setup Miniconda
+        uses: conda-incubator/setup-miniconda@624cf702706ced050d52aa9187c7215fcb1b84a0
+        with:
+          environment-file: conda/env/bolt_env.yml
+          conda-solver: libmamba
+      - name: Run Python tests
+        run: |
+          python3 -m unittest discover tests/ --buffer
