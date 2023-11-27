@@ -8,9 +8,10 @@ channels:
   - defaults
 
 dependencies:
-  - bcftools >=1.15
+  - bcftools ==1.17
   - biopython
   - cyvcf2 >=0.30.16
+  - htslib ==1.17
   - pybedtools
   - python >=3.10
   - pyyaml
