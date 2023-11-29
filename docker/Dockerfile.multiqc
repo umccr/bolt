@@ -20,7 +20,7 @@ RUN \
 
 RUN \
   conda run --prefix /env/ pip install 'multiqc ==1.15' && \
-  conda run --prefix /env/ pip install 'git+https://github.com/scwatts/multiqc_umccr@v0.0.2'
+  conda run --prefix /env/ pip install 'git+https://github.com/umccr/multiqc_template@v0.0.2'
 
 COPY ./ /tmp/bolt/
 RUN \
