@@ -17,6 +17,7 @@ from ... import util
 @click.option('--af_keygenes_fp', required=True, type=click.Path(exists=True))
 
 @click.option('--smlv_somatic_vcf_fp', required=True, type=click.Path(exists=True))
+@click.option('--smlv_somatic_bcftools_stats_fp', required=True, type=click.Path(exists=True))
 @click.option('--smlv_somatic_counts_process_fp', required=True, type=click.Path(exists=True))
 
 @click.option('--sv_somatic_tsv_fp', required=True, type=click.Path(exists=True))
@@ -27,6 +28,8 @@ from ... import util
 
 @click.option('--purple_dir', required=True, type=click.Path(exists=True))
 @click.option('--virusbreakend_dir', required=True, type=click.Path(exists=True))
+
+@click.option('--dragen_hrd_fp', required=True, type=click.Path(exists=True))
 
 @click.option('--cancer_genes_fp', required=True, type=click.Path(exists=True))
 @click.option('--oncokb_genes_fp', required=True, type=click.Path(exists=True))
@@ -84,6 +87,9 @@ def entry(ctx, **kwargs):
             \
             --virusbreakend_tsv {kwargs['virusbreakend_dir']}/{kwargs['tumor_name']}.virusbreakend.vcf.summary.tsv \
             --virusbreakend_vcf {kwargs['virusbreakend_dir']}/{kwargs['tumor_name']}.virusbreakend.vcf \
+            \
+            --dragen_hrd {kwargs['dragen_hrd_fp']} \
+            --bcftools_stats {kwargs['smlv_somatic_bcftools_stats_fp']} \
             \
             --key_genes {kwargs['cancer_genes_fp']} \
             --oncokb_genes {kwargs['oncokb_genes_fp']} \
