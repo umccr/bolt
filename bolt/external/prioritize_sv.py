@@ -50,9 +50,8 @@ import cyvcf2
 def run(
     sv_vcf,
     known_fusion_pairs,
-    known_fusion_heads,
-    known_fusion_tails,
-    fusion_catcher_pairs,
+    known_fusion_five,
+    known_fusion_three,
     key_genes,
     key_tsgenes,
     bed_annotations_appris,
@@ -90,10 +89,9 @@ def run(
     # Read in reference data
     known_pairs, fus_promisc = _read_hmf_lists(
         known_fusion_pairs,
-        known_fusion_heads,
-        known_fusion_tails,
+        known_fusion_five,
+        known_fusion_three,
     )
-    tier2_pairs = _read_list(fusion_catcher_pairs)
     prio_genes = _read_list(key_genes)
     tsgenes = _read_list(key_tsgenes)
 
@@ -105,7 +103,6 @@ def run(
             all_trs,
             known_pairs,
             fus_promisc,
-            tier2_pairs,
             prio_genes,
             tsgenes,
         )
@@ -125,7 +122,7 @@ def _read_list(fpath):
     return out_set
 
 
-def _read_hmf_lists(pairs_fp, heads_fp, tails_fp):
+def _read_hmf_lists(pairs_fp, five_fp, three_fp):
     # TODO: check how HMF prioritizes; check if we known order of promiscuous
 
     known_pairs = set()
@@ -137,7 +134,7 @@ def _read_hmf_lists(pairs_fp, heads_fp, tails_fp):
                 g1, g2 = l.split(',')[0:2]
                 if g1 and g2 and g1 != 'H_gene':
                     known_pairs.add((g1, g2))
-    with open(heads_fp) as f1, open(tails_fp) as f2:
+    with open(five_fp) as f1, open(three_fp) as f2:
         for l in itertools.chain(f1, f2):
             l = l.strip().replace('"', '')
             if l:
@@ -197,7 +194,6 @@ def process_record(
     all_trs,
     known_pairs,
     fus_promisc,
-    tier2_pairs,
     prio_genes,
     tsgenes,
 ):
@@ -283,10 +279,6 @@ def process_record(
                     ann_tier = 1
                     ann_detail = "known_promiscuous"
 
-                elif {(g1, g2), (g2, g1)} & tier2_pairs:
-                    ann_tier = 2
-                    ann_detail = "known_pair"
-
         # "downstream_gene_variant" and "upstream_gene_variant" can also turn out to be a fusion
         # when gene A falls into control of a promoter of gene B
         elif effects & {"downstream_gene_variant", "upstream_gene_variant"}:
@@ -299,10 +291,6 @@ def process_record(
                 elif {g1, g2} & fus_promisc:
                     ann_tier = 2
                     ann_detail = "known_promiscuous"
-
-                elif {(g1, g2), (g2, g1)} & tier2_pairs:
-                    ann_tier = 3
-                    ann_detail = "known_pair"
 
             # One of the genes is of interest
             elif genes & prio_genes:

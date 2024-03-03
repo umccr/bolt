@@ -15,9 +15,8 @@ from ...external import prioritize_sv
 @click.option('--sv_vcf', required=True, type=click.Path(exists=True))
 
 @click.option('--refdata_known_fusion_pairs', required=True, type=click.Path(exists=True))
-@click.option('--refdata_known_fusion_heads', required=True, type=click.Path(exists=True))
-@click.option('--refdata_known_fusion_tails', required=True, type=click.Path(exists=True))
-@click.option('--refdata_fusioncatcher_pairs', required=True, type=click.Path(exists=True))
+@click.option('--refdata_known_fusion_five', required=True, type=click.Path(exists=True))
+@click.option('--refdata_known_fusion_three', required=True, type=click.Path(exists=True))
 @click.option('--refdata_key_genes', required=True, type=click.Path(exists=True))
 @click.option('--refdata_key_tsgenes', required=True, type=click.Path(exists=True))
 
@@ -38,9 +37,8 @@ def entry(ctx, **kwargs):
     prioritize_sv.run(
         kwargs['sv_vcf'],
         kwargs['refdata_known_fusion_pairs'],
-        kwargs['refdata_known_fusion_heads'],
-        kwargs['refdata_known_fusion_tails'],
-        kwargs['refdata_fusioncatcher_pairs'],
+        kwargs['refdata_known_fusion_five'],
+        kwargs['refdata_known_fusion_three'],
         kwargs['refdata_key_genes'],
         kwargs['refdata_key_tsgenes'],
         kwargs['appris_fp'],
