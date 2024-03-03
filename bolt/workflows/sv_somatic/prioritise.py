@@ -64,6 +64,9 @@ def create_sv_tsv(input_fp, tumor_name, output_dir):
         'svtype',
         'SR_alt',
         'PR_alt',
+        'SR_asm_alt',
+        'PR_asm_alt',
+        'IC_alt',
         'SR_ref',
         'PR_ref',
         'QUAL',
@@ -92,14 +95,22 @@ def create_sv_tsv(input_fp, tumor_name, output_dir):
         else:
             purple_status = ''
 
+        # Select most appropriate read support categories
+        # NOTE(SW): BNDs can also report breakend support, ignoring in preference to breakpoint support
+        eventtype = record.INFO.get('EVENTTYPE', '')
+        if eventtype == 'SGL':
+            read_support_fields = ['BSC', 'BUM', 'BASSR', 'BASRP']
+        else:
+            read_support_fields = ['SR', 'RP', 'ASSR', 'ASRP']
+        assert len(read_support_fields) == 4
+        read_support_fields.extend(('IC', 'REF', 'REFPAIR'))
+        read_support_data = [parse_read_support_field(record, e) for e in read_support_fields]
+
         data = (
             record.CHROM.replace('chr', ''),
             record.POS,
-            record.INFO.get('EVENTTYPE', ''),
-            parse_read_support_field(record, 'SR'),
-            parse_read_support_field(record, 'RP'),
-            parse_read_support_field(record, 'REF'),
-            parse_read_support_field(record, 'REFPAIR'),
+            eventtype,
+            *read_support_data,
             record.QUAL,
             record.INFO.get('SV_TOP_TIER', 4),
             record.INFO['SIMPLE_ANN'],
