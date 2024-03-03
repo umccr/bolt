@@ -57,7 +57,10 @@ def entry(ctx, **kwargs):
 
     # Apply set FILTERs
     set_fp = output_dir / f'{kwargs["tumor_name"]}.pass.vcf.gz'
-    command = f'bcftools view -f PASS,. -o {set_fp} {filters_fp}'
+    command = fr'''
+        bcftools view -f PASS,. -o {set_fp} {filters_fp}'
+        bcftools index -t {set_fp}
+    '''
     util.execute_command(command)
 
 
