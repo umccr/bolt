@@ -138,6 +138,19 @@ def run_somatic(input_fp, pcgr_dir, output_dir, threads=1, pcgr_conda=None, pcgr
         f'--vep_pick_order biotype,rank,appris,tsl,ccds,canonical,length,mane',
     ]
 
+    # NOTE(SW): VEP pick order is applied as a successive filter:
+    #   * sort variants within the next category
+    #   * select variants with lowest order value (i.e. best within category)
+    #   * if only one selected variants return it, else proceed to next category
+    #
+    # Where pick categories have been exhausted and multiple variants remain tied, the first
+    # variant in the sort array is returned.
+    #
+    # The 'biotype' category only sorts on basis of a variant impact being coding or non-coding.
+    #
+    # Cat sort: https://github.com/Ensembl/ensembl-vep/blob/105.0/modules/Bio/EnsEMBL/VEP/OutputFactory.pm#L718
+    # Pick order: https://github.com/Ensembl/ensembl-vep/blob/105.0/modules/Bio/EnsEMBL/VEP/OutputFactory.pm#L760
+
     if pcgrr_conda:
         command_args.append(f'--pcgr_dir {pcgr_dir}')
 
