@@ -48,13 +48,11 @@ def entry(ctx, **kwargs):
     filter_pass_fp = set_filter_pass(kwargs['vcf_fp'], kwargs['tumor_name'], output_dir)
 
     # Annotate with:
-    #   - gnomAD r2.1 [INFO/gnomAD_AF]
-    #   - Merged hotspots [INFO/HMF_HOTSPOT]
-    #   - GIAB high confidence regions from HMF [INFO/HMF_GIAB_CONF]
+    #   - gnomAD [INFO/gnomAD_AF]
+    #   - Hartwig hotspots [INFO/HMF_HOTSPOT]
     #   - ENCODE blocklist [INFO/ENCODE]
-    #   - UCSC segmental duplications [INFO/SEGDUP]
-    #   - GA4GH genome stratifications [INFO/TRICKY_*]
-    #   - One other LCR file (competes with GA4GH LCR) [INFO/TRICKY_LCR]
+    #   - GIAB high confidence regions [INFO/GIAB_CONF]
+    #   - Selected GA4GH/GIAB problem region stratifications [INFO/DIFFICULT_*]
     vcfanno_fp = general_annotations(
         filter_pass_fp,
         kwargs['tumor_name'],

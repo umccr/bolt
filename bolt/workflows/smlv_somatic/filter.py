@@ -93,19 +93,21 @@ def set_filter_data(record, tumor_index):
     # AD filter (degraded mappability)
     ##
     # If a variant falls within difficult to call regions (low sequence complexity, poor
-    # mappability, GIAB confidence, etc), increase required minimum allele depth in anticipation of
+    # mappability, segemental duplications, etc), increase required minimum allele depth in anticipation of
     # elevated alignment error rate
     difficult_region_tags_enums = (
-        constants.VcfInfo.SEGDUP,
-        constants.VcfInfo.TRICKY_LCR,
-        constants.VcfInfo.TRICKY_GC15,
-        constants.VcfInfo.TRICKY_GC70TO75,
-        constants.VcfInfo.TRICKY_GC75TO80,
-        constants.VcfInfo.TRICKY_GC80TO85,
-        constants.VcfInfo.TRICKY_GC85,
-        constants.VcfInfo.TRICKY_HENG_UM75_HS37D5,
-        constants.VcfInfo.TRICKY_LOW_COMPLEXITY_51TO200BP,
-        constants.VcfInfo.TRICKY_LOW_COMPLEXITY_GT200BP,
+        constants.VcfInfo.DIFFICULT_BAD_PROMOTER,
+        constants.VcfInfo.DIFFICULT_GC15,
+        constants.VcfInfo.DIFFICULT_GC70TO75,
+        constants.VcfInfo.DIFFICULT_GC75TO80,
+        constants.VcfInfo.DIFFICULT_GC80TO85,
+        constants.VcfInfo.DIFFICULT_GC80,
+        constants.VcfInfo.DIFFICULT_LOW_COMPLEXITY_DITR,
+        constants.VcfInfo.DIFFICULT_LOW_COMPLEXITY_QUADTR,
+        constants.VcfInfo.DIFFICULT_LOW_COMPLEXITY_TANDEMREPEATS,
+        constants.VcfInfo.DIFFICULT_LOW_COMPLEXITY_TRITR,
+        constants.VcfInfo.DIFFICULT_MAPPABILITY_NONUNIQUE,
+        constants.VcfInfo.DIFFICULT_SEGDUP,
     )
     difficult_region_tags = {e.value for e in difficult_region_tags_enums}
 
