@@ -16,8 +16,8 @@ HEADER_STR = (
     '##FORMAT=<ID=AD,Number=.,Type=Integer,Description="">\n'
     '##FORMAT=<ID=AF,Number=A,Type=Float,Description="">\n'
     '##FORMAT=<ID=GT,Number=1,Type=String,Description="">\n'
-    '##INFO=<ID=HMF_GIAB_CONF,Number=0,Type=Flag,Description="">\n'
-    '##INFO=<ID=SEGDUP,Number=0,Type=Flag,Description="">\n'
+    '##INFO=<ID=GIAB_CONF,Number=0,Type=Flag,Description="">\n'
+    '##INFO=<ID=DIFFICULT_segdup,Number=0,Type=Flag,Description="">\n'
     '##INFO=<ID=PON_COUNT,Number=1,Type=Integer,Description="">\n'
     '##INFO=<ID=ENCODE,Number=0,Type=Flag,Description="">\n'
     '##INFO=<ID=HMF_HOTSPOT,Number=0,Type=Flag,Description="">\n'
@@ -98,7 +98,7 @@ class TestSmlvSomaticFilter(unittest.TestCase):
     def test_min_ad_filter(self):
         record = get_record(
             **self.records['filter_min_ad3'],
-            info_data={'HMF_GIAB_CONF': ''},
+            info_data={'GIAB_CONF': ''},
         )
         smlv_somatic_filter.set_filter_data(record, 0)
         assert bolt_constants.VcfFilter.MIN_AD.value in record.FILTERS
@@ -107,7 +107,7 @@ class TestSmlvSomaticFilter(unittest.TestCase):
     def test_min_ad_difficult_filter(self):
         record = get_record(
             **self.records['filter_min_ad5'],
-            info_data={'SEGDUP': '', 'HMF_GIAB_CONF': ''},
+            info_data={'DIFFICULT_segdup': '', 'GIAB_CONF': ''},
         )
         smlv_somatic_filter.set_filter_data(record, 0)
 
@@ -117,7 +117,7 @@ class TestSmlvSomaticFilter(unittest.TestCase):
     def test_min_ad_difficult_filter_with_non_giab_conf(self):
         record = get_record(
             **self.records['filter_min_ad3'],
-            info_data={'SEGDUP': ''},
+            info_data={'DIFFICULT_segdup': ''},
         )
         smlv_somatic_filter.set_filter_data(record, 0)
 
@@ -263,11 +263,11 @@ class TestSmlvSomaticFilter(unittest.TestCase):
 
         record = get_record(
             **self.records['pass_af10'],
-            vfilter='SEGDUP',
+            vfilter='DIFFICULT_segdup',
             info_data={'HMF_HOTSPOT': ''},
         )
         smlv_somatic_filter.set_filter_data(record, 0)
 
         assert not record.FILTER
         assert record.INFO.get(bolt_constants.VcfInfo.RESCUED_FILTERS_PENDING.value) is None
-        assert record.INFO.get(rescued_filters_str) == 'SEGDUP'
+        assert record.INFO.get(rescued_filters_str) == 'DIFFICULT_segdup'

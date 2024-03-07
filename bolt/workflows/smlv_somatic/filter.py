@@ -116,7 +116,7 @@ def set_filter_data(record, tumor_index):
         if any(record.INFO.get(e) is not None for e in difficult_region_tags):
             filters.append(constants.VcfFilter.MIN_AD_DIFFICULT)
 
-        if record.INFO.get(constants.VcfInfo.HMF_GIAB_CONF.value) is None:
+        if record.INFO.get(constants.VcfInfo.GIAB_CONF.value) is None:
             filters.append(constants.VcfFilter.MIN_AD_NON_GIAB)
 
     # NOTE(SW): filter_somatic_vcf from umccr/vcf_stuff includes a mappability filter but the INFO
