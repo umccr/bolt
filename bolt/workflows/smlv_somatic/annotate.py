@@ -282,10 +282,14 @@ def exclude_non_cancer_genes(input_fp, tumor_name, bed_fp, output_dir):
 
 
 def get_cancer_gene_variants(input_fp, bed_fp):
-    # NOTE(SW): current UMCCR cancer gene list (umccr_cancer_genes.hg38.ensembl107.sort.bed)
-    # already contains 1,000 bp padding
+    # Apply 1,000 bp padding to gene boundaries
     genes_variants_fp = pathlib.Path('genes_variants.vcf.gz')
-    util.execute_command(f'bcftools view --regions-file {bed_fp} -o {genes_variants_fp} {input_fp}')
+    util.execute_command(fr'''
+        bcftools view \
+            --regions-file <(awk 'BEGIN {{ OFS="\t" }} {{ $2-=1000; $3+=1000; print $0 }}" {bed_fp}) \
+            --output {genes_variants_fp} \
+            {input_fp}
+    ''')
 
     gene_variants = set()
     for record in cyvcf2.VCF(genes_variants_fp):
