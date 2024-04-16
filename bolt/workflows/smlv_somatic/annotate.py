@@ -264,7 +264,7 @@ def exclude_non_cancer_genes(input_fp, tumor_name, bed_fp, output_dir):
     # as a hotspot
 
     header_enum = constants.VcfFilter.MAX_VARIANTS_NON_CANCER_GENES
-    gene_variants = get_cancer_gene_variants(input_fp, bed_fp)
+    gene_variants = get_cancer_gene_variants(input_fp, bed_fp, output_dir)
 
     def process_fn(record, selected_fh, filtered_fh, *, gene_variants):
         # Write to filtered_fp if passes criteria: in a hotspot or associated with a cancer gene
@@ -281,12 +281,12 @@ def exclude_non_cancer_genes(input_fp, tumor_name, bed_fp, output_dir):
             output_dir, gene_variants=gene_variants)
 
 
-def get_cancer_gene_variants(input_fp, bed_fp):
+def get_cancer_gene_variants(input_fp, bed_fp, output_dir):
     # Apply 1,000 bp padding to gene boundaries
-    genes_variants_fp = pathlib.Path('genes_variants.vcf.gz')
+    genes_variants_fp = output_dir / 'genes_variants.vcf.gz'
     util.execute_command(fr'''
         bcftools view \
-            --regions-file <(awk 'BEGIN {{ OFS="\t" }} {{ $2-=1000; $3+=1000; print $0 }}" {bed_fp}) \
+            --regions-file <(awk 'BEGIN {{ OFS="\t" }} {{ $2-=1000; $3+=1000; print $0 }}' {bed_fp}) \
             --output {genes_variants_fp} \
             {input_fp}
     ''')
