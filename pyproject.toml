@@ -8,7 +8,7 @@ include = ["bolt*"]
 
 [project]
 name = "bolt"
-version = "0.2.10"
+version = "0.2.11"
 dependencies = [
     "biopython",
     "cyvcf2",
