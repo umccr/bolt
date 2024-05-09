@@ -17,18 +17,11 @@ RUN \
 
 RUN \
   conda install --prefix /env/ \
-    'r-gpgr ==1.4.3' \
-    'r-sigrap ==0.0.4' \
-    'bioconductor-bsgenome.hsapiens.ucsc.hg38 ==1.4.4' \
-    'bioconductor-txdb.hsapiens.ucsc.hg38.knowngene ==3.14.0' \
-    'bioconductor-genomeinfodbdata ==1.2.7'
-
-RUN \
-  conda install git
-
-RUN \
-  git clone -b oncoanalyser-sash-inputs https://github.com/scwatts/gpgr_sash /tmp/gpgr/ && \
-  conda run --prefix /env/ R CMD INSTALL --build /tmp/gpgr/
+    'r-gpgr ==2.0.0' \
+    'r-sigrap ==0.1.1' \
+    'bioconductor-bsgenome.hsapiens.ucsc.hg38 ==1.4.5' \
+    'bioconductor-txdb.hsapiens.ucsc.hg38.knowngene ==3.18.0' \
+    'bioconductor-genomeinfodbdata ==1.2.11'
 
 COPY ./ /tmp/bolt/
 RUN \
