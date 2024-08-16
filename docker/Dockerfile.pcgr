@@ -34,29 +34,14 @@ RUN \
 RUN \
   conda install bash
 
-# NOTE(SW): must take Conda install across to distroless, hence the prior clean
+# NOTE(SW): must take Conda install across since we use it to access different envs, hence the prior clean
 
 RUN \
   conda clean -afy
 
-FROM gcr.io/distroless/base-debian11:latest
+FROM quay.io/bioconda/base-glibc-busybox-bash:2.1.0
 
-# Copy BusyBox binaries; Nextflow uses /bin/bash to execute process shell code
-COPY --from=busybox:1.35.0-uclibc /bin/ /bin/
-COPY --from=build /opt/conda/bin/bash /bin/
-
-# R seemingly requires /usr/bin/which
-COPY --from=busybox:1.35.0-uclibc /bin/which /usr/bin/
-
-# OpenSSL v1.0 library required for Perl (dependency of vep), usually available through system;
-# Conda env from above contains OpenSSL v3
-COPY --from=build /usr/lib/x86_64-linux-gnu/libcrypt.so.1 /env/lib/
-
-# Copy 'env' to the location required by vep
-COPY --from=busybox:1.35.0-uclibc /bin/env /usr/bin/
-
-# Copy Conda install and environments
+# Copy Conda install and all environments
 COPY --from=build /opt/conda/ /opt/conda/
 
 ENV PATH="/opt/conda/envs/bolt/bin:/opt/conda/bin:${PATH}"
-ENV LD_LIBRARY_PATH="/opt/conda/lib/:${LD_LIBRARY_PATH}"
