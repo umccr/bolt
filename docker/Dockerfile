@@ -1,4 +1,4 @@
-FROM continuumio/miniconda3:23.5.2-0-alpine as build
+FROM continuumio/miniconda3:24.5.0-0 as build
 
 RUN \
   conda install conda-libmamba-solver
