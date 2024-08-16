@@ -50,7 +50,7 @@ COPY --from=busybox:1.35.0-uclibc /bin/which /usr/bin/
 
 # OpenSSL v1.0 library required for Perl (dependency of vep), usually available through system;
 # Conda env from above contains OpenSSL v3
-COPY --from=build /usr/glibc-compat/lib/libcrypt.so.1 /opt/conda/lib/
+COPY --from=build /usr/lib/x86_64-linux-gnu/libcrypt.so.1 /env/lib/
 
 # Copy 'env' to the location required by vep
 COPY --from=busybox:1.35.0-uclibc /bin/env /usr/bin/
