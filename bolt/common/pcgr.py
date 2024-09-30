@@ -6,10 +6,7 @@ import pathlib
 import re
 import shutil
 import tempfile
-import logging
-import concurrent.futures
-import gzip  # added import
-
+import time
 
 import cyvcf2
 
@@ -119,15 +116,19 @@ def get_minimal_header(input_fh):
     return '\n'.join([filetype_line, *chrom_lines, *format_lines, column_line])
 
 
-def run_somatic(input_fp, pcgr_refdata_dir, vep_dir, output_dir, chunk_nbr=None, threads=1, pcgr_conda=None, pcgrr_conda=None, purity=None, ploidy=None, sample_id=None):
+def run_somatic(input_fp, chunk_nbr, pcgr_refdata_dir, output_dir, threads=1, pcgr_conda=None, pcgrr_conda=None, purity=None, ploidy=None, sample_id=None):
 
 
     temp_dir = tempfile.TemporaryDirectory()
-    output_dir = output_dir / f"pcgr_{chunk_nbr}" if chunk_nbr is not None else output_dir
+    pcgr_output_dir = output_dir / f'pcgr{chunk_nbr}/'
+    # Check if the output directory already exists
+    if pcgr_output_dir.exists():
+        print(f"Warning: Output directory '{pcgr_output_dir}' already exists.")
+        print("Waiting for 3 seconds before overwriting...")
+        #time.sleep(3)  # Wait for 3 seconds
 
-    if output_dir.exists():
-        logger.warning(f"Output directory '{output_dir}' already exists and will be overwritten")
-        shutil.rmtree(output_dir)
+        # If the user chooses to continue, delete the existing directory
+        shutil.rmtree(pcgr_output_dir)
 
 
     if not sample_id:
