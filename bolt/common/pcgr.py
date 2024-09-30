@@ -114,7 +114,7 @@ def get_minimal_header(input_fh):
     return '\n'.join([filetype_line, *chrom_lines, *format_lines, column_line])
 
 
-def run_somatic(input_fp, pcgr_refdata_dir, vep_dir, output_dir, chunk_nbr=None, threads=1, pcgr_conda=None, pcgrr_conda=None, purity=None, ploidy=None, sample_id=None):
+def run_somatic(input_fp, chunk_nbr, pcgr_refdata_dir, pcgr_output_dir, chunk_nbr=None, threads=1, pcgr_conda=None, pcgrr_conda=None, purity=None, ploidy=None, sample_id=None):
 
 
     output_dir = output_dir / f"pcgr_{chunk_nbr}" if chunk_nbr is not None else output_dir
