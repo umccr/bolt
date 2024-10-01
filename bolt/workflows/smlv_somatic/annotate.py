@@ -148,8 +148,8 @@ def entry(ctx, **kwargs):
     merge_tsv_files(tsv_files, merged_tsv_fp)
 
     # Step 5: Merge all VCF files into a single file in the pcgr directory
-    merged_vcf_fp = os.path.join(pcgr_dir, "nosampleset.pcgr_acmg.grch38.vcf.gz")
-    merge_vcf_files(vcf_files, merged_vcf_fp)
+    merged_vcf_fp = os.path.join(pcgr_dir, "nosampleset.pcgr_acmg.grch38")
+    merged_vcf = merge_vcf_files(vcf_files, merged_vcf_fp)
     # pcgr_dir = pcgr.run_somatic(
         # merged_vcf,
         # kwargs['pcgr_data_dir'],
@@ -162,7 +162,7 @@ def entry(ctx, **kwargs):
 
     # Transfer PCGR annotations to full set of variants
     pcgr.transfer_annotations_somatic(
-        merged_vcf_fp,
+        merged_vcf,
         kwargs['tumor_name'],
         pcgr_vcf_fp,
         pcgr_tsv_fp,
@@ -183,48 +183,36 @@ def merge_tsv_files(tsv_files, merged_tsv_fp):
                     merged_tsv.write(line)
     print(f"Merged TSV written to: {merged_tsv_fp}")
 
+
 def merge_vcf_files(vcf_files, merged_vcf_fp):
-    """
-    Merges multiple VCF files into a single VCF file, ensuring the headers are synchronized,
-    especially the ##contig entries.
-    """
-    # Initialize variables
-    contigs = {}  # Store unique contigs with their lengths
-    merged_header = None
-    for vcf_file in vcf_files:
-        vcf_in = pysam.VariantFile(vcf_file, 'r')
-        header = vcf_in.header
+    merged_unsorted_vcf = merged_vcf_fp + '.unsorted.vcf.gz'
+    merged_vcf = merged_vcf_fp + '.vcf.gz'
 
-        # Collect all contigs from the current VCF file
-        for contig_name, contig_info in header.contigs.items():
-            if contig_name not in contigs:
-                contigs[contig_name] = contig_info.length
 
-        # Store the first header to initialize the merged header
-        if merged_header is None:
-            merged_header = vcf_in.header.copy()
+    cmd = ['bcftools', 'merge', '-m', 'all', '-Oz', '-o', merged_unsorted_vcf] + vcf_files
+    # Run the bcftools merge command
+    try:
+        print("Running bcftools merge...")
+        subprocess.run(cmd, check=True)
+        print(f"Merged VCF written to: {merged_unsorted_vcf}")
+    except subprocess.CalledProcessError as e:
+        print(f"Error merging VCF files with bcftools:\n{e}")
+        raise
 
-        vcf_in.close()
+    # Sort the merged VCF file
+    cmd_sort = ['bcftools', 'sort', '-Oz', '-o', merged_vcf, merged_unsorted_vcf]
+    try:
+        print(f"Sorting merged VCF file...")
+        subprocess.run(cmd_sort, check=True)
+        print(f"Sorted merged VCF written to: {merged_vcf}")
+    except subprocess.CalledProcessError as e:
+        print(f"Error sorting merged VCF file:\n{e}")
+        raise
 
-    # Step 2: Ensure the merged header contains all unique contigs
-    for contig_name, contig_length in contigs.items():
-        if contig_name not in merged_header.contigs:
-            merged_header.contigs.add(contig_name, length=contig_length)
+    return merged_vcf
 
-    # Step 3: Open the output VCF file for writing
-    vcf_out = pysam.VariantFile(merged_vcf_fp, 'w', header=merged_header)
 
-    # Step 4: Write records from each input VCF file to the merged VCF
-    for vcf_file in vcf_files:
-        vcf_in = pysam.VariantFile(vcf_file, 'r')
-        for record in vcf_in:
-            vcf_out.write(record)
-        vcf_in.close()
 
-    # Close the output VCF file
-    vcf_out.close()
-
-    print(f"Merged VCF written to: {merged_vcf_fp}")
 def set_filter_pass(input_fp, tumor_name, output_dir):
     output_fp = output_dir / f'{tumor_name}.set_filter_pass.vcf.gz'
 

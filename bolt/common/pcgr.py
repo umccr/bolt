@@ -492,7 +492,7 @@ def annotate_record(record, annotations, *, allow_missing=False):
     # Get lookup key
     assert len(record.ALT) == 1
     [alt] = record.ALT
-    key = (record.CHROM, record.POS, record.REF, alt)
+    key = ("chr"+record.CHROM, record.POS, record.REF, alt)
 
     # Handle missing entries
     if key not in annotations:
