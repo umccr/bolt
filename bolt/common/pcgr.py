@@ -110,14 +110,13 @@ def get_minimal_header(input_fh):
     return '\n'.join([filetype_line, *chrom_lines, *format_lines, column_line])
 
 
-def run_somatic(input_fp, chunk_nbr, pcgr_refdata_dir, output_dir, threads=1, pcgr_conda=None, pcgrr_conda=None, purity=None, ploidy=None, sample_id=None):
+def run_somatic(input_fp, pcgr_refdata_dir, pcgr_output_dir, chunk_nbr=None, threads=1, pcgr_conda=None, pcgrr_conda=None, purity=None, ploidy=None, sample_id=None):
 
     # NOTE(SW): Nextflow FusionFS v2.2.8 does not support PCGR output to S3; instead write to a
     # temporary directory outside of the FusionFS mounted directory then manually copy across
 
     temp_dir = tempfile.TemporaryDirectory()
-    pcgr_output_dir = output_dir / f'pcgr{chunk_nbr}/'
-    # Check if the output directory already exists
+    pcgr_output_dir = pcgr_output_dir / f"{chunk_nbr}" if chunk_nbr is not None else pcgr_output_dir    # Check if the output directory already exists
     if pcgr_output_dir.exists():
         print(f"Warning: Output directory '{pcgr_output_dir}' already exists.")
         print("Waiting for 3 seconds before overwriting...")
@@ -476,7 +475,7 @@ def annotate_record(record, annotations, *, allow_missing=False):
     # Get lookup key
     assert len(record.ALT) == 1
     [alt] = record.ALT
-    key = ("chr"+record.CHROM, record.POS, record.REF, alt)
+    key = (record.CHROM, record.POS, record.REF, alt)
 
     # Handle missing entries
     if key not in annotations:
