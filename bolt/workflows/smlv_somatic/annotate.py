@@ -10,7 +10,6 @@ from ... import util
 from ...common import constants
 from ...common import pcgr
 import os
-import pysam
 
 
 @click.command(name='annotate')
@@ -88,16 +87,15 @@ def entry(ctx, **kwargs):
     #       - Hits in TCGA [INFO/PCGR_TCGA_PANCANCER_COUNT]
     #       - Hits in PCAWG [INFO/PCGR_ICGC_PCAWG_COUNT]
     # Set selected data or full input
-    
+
     selection_data = select_variants(
         pon_fp,
         kwargs['tumor_name'],
         kwargs['cancer_genes_fp'],
         output_dir,
     )
-    # if not (pcgr_prep_input_fp := selection_data.get('filtered')):
-        # pcgr_prep_input_fp = selection_data['selected']
-
+   # if not (pcgr_prep_input_fp := selection_data.get('filtered')):
+       # pcgr_prep_input_fp = selection_data['selected']
     # Prepare VCF for PCGR annotation
     pcgr_prep_fp = pcgr.prepare_vcf_somatic(
         pon_fp,
@@ -105,15 +103,48 @@ def entry(ctx, **kwargs):
         kwargs['normal_name'],
         output_dir,
     )
-    
-    chunk_files = split_vcf(pcgr_prep_fp, output_dir)
-    print(f"VCF file split into {len(chunk_files)} chunks.")
+
+    vcf_chunks = util.split_vcf(
+        pcgr_prep_fp,
+        output_dir
+    )
     # Run PCGR
-        # Run pcgr.run_somatic on each chunk in parallel
+    pcgr_output_dir = output_dir / 'pcgr'
+    if len(vcf_chunks) > 1 :
+        run_somatic_chunck(
+        vcf_chunks,
+        kwargs['pcgr_data_dir'],
+        output_dir,
+        pcgr_output_dir,
+        kwargs['threads'],
+        kwargs['pcgr_conda'],
+        kwargs['pcgrr_conda']
+    )
+    else:
+        pcgr.run_somatic(
+        vcf_chunks[0],
+        kwargs['pcgr_data_dir'],
+        pcgr_output_dir,
+        chunk_nbr=None,
+        threads=kwargs['threads'],
+        pcgr_conda=kwargs['pcgr_conda'],
+        pcgrr_conda=kwargs['pcgrr_conda'],
+    )
+
+    # Transfer PCGR annotations to full set of variants
+    pcgr.transfer_annotations_somatic(
+        selection_data['selected'],
+        kwargs['tumor_name'],
+        selection_data.get('filter_name'),
+        pcgr_output_dir,
+        output_dir,
+    )
+
+def run_somatic_chunck(vcf_chunks,pcgr_data_dir, output_dir,pcgr_output_dir, threads, pcgr_conda, pcgrr_conda):
     output_dirs = []
     with concurrent.futures.ProcessPoolExecutor() as executor:
-        futures = {executor.submit(pcgr.run_somatic, vcf_file, chunk_number,kwargs['pcgr_data_dir'], output_dir, threads=kwargs['threads'], pcgr_conda=kwargs['pcgr_conda'],pcgrr_conda=kwargs['pcgrr_conda']): chunk_number 
-                   for chunk_number, vcf_file in enumerate(chunk_files, start=1)}
+        futures = {executor.submit(pcgr.run_somatic, vcf_file, pcgr_data_dir, pcgr_output_dir, chunk_number, threads, pcgr_conda,pcgrr_conda): chunk_number 
+                   for chunk_number, vcf_file in enumerate(vcf_chunks, start=1)}
         for future in concurrent.futures.as_completed(futures):
             try:
                 result_dir = future.result()
@@ -122,11 +153,13 @@ def entry(ctx, **kwargs):
             except Exception as e:
                 print(f"Exception occurred: {e}")
 
-    pcgr_dir = output_dir / 'pcgr/'
-    pcgr_dir = pathlib.Path(output_dir) / 'pcgr'
-    pcgr_dir.mkdir(exist_ok=True)
+    pcgr_dir = merging_pcgr_files(output_dir, output_dirs)
+    return pcgr_dir
 
-        # Step 3: Merge all chunk VCF files into a single file
+def merging_pcgr_files(output_dir, output_dirs):
+    # Step 3: Merge all chunk VCF files into a single file
+    pcgr_dir = output_dir / 'pcgr/'
+    pcgr_dir.mkdir(exist_ok=True)
     tsv_files = []
     vcf_files = []
     for pcgr_dir_chunk in output_dirs:
@@ -136,76 +169,13 @@ def entry(ctx, **kwargs):
             tsv_files.append(str(pcgr_tsv_fp))
         if pcgr_vcf_fp.exists():
             vcf_files.append(str(pcgr_vcf_fp))
-
     # Step 4: Merge all TSV files into a single file in the pcgr directory
     merged_tsv_fp = os.path.join(pcgr_dir, "nosampleset.pcgr_acmg.grch38.snvs_indels.tiers.tsv")
-    merge_tsv_files(tsv_files, merged_tsv_fp)
-
+    util.merge_tsv_files(tsv_files, merged_tsv_fp)
     # Step 5: Merge all VCF files into a single file in the pcgr directory
     merged_vcf_fp = os.path.join(pcgr_dir, "nosampleset.pcgr_acmg.grch38")
-    merged_vcf = merge_vcf_files(vcf_files, merged_vcf_fp)
-    # pcgr_dir = pcgr.run_somatic(
-        # merged_vcf,
-        # kwargs['pcgr_data_dir'],
-        # output_dir,
-        # threads=kwargs['threads'],
-        # pcgr_conda=kwargs['pcgr_conda'],
-        # pcgrr_conda=kwargs['pcgrr_conda'],
-    # )
-
-
-    # Transfer PCGR annotations to full set of variants
-    pcgr.transfer_annotations_somatic(
-        merged_vcf,
-        kwargs['tumor_name'],
-        selection_data.get('filter_name'),
-        pcgr_dir,
-        output_dir,
-    )
-
-def merge_tsv_files(tsv_files, merged_tsv_fp):
-    """
-    Merges all TSV files into a single TSV.
-    """
-    with open(merged_tsv_fp, 'w') as merged_tsv:
-        for i, tsv_file in enumerate(tsv_files):
-            with open(tsv_file, 'r') as infile:
-                for line_number, line in enumerate(infile):
-                    # Skip header except for the first file
-                    if i > 0 and line_number == 0:
-                        continue
-                    merged_tsv.write(line)
-    print(f"Merged TSV written to: {merged_tsv_fp}")
-
-
-def merge_vcf_files(vcf_files, merged_vcf_fp):
-    merged_unsorted_vcf = merged_vcf_fp + '.unsorted.vcf.gz'
-    merged_vcf = merged_vcf_fp + '.vcf.gz'
-
-
-    cmd = ['bcftools', 'merge', '-m', 'all', '-Oz', '-o', merged_unsorted_vcf] + vcf_files
-    # Run the bcftools merge command
-    try:
-        print("Running bcftools merge...")
-        subprocess.run(cmd, check=True)
-        print(f"Merged VCF written to: {merged_unsorted_vcf}")
-    except subprocess.CalledProcessError as e:
-        print(f"Error merging VCF files with bcftools:\n{e}")
-        raise
-
-    # Sort the merged VCF file
-    cmd_sort = ['bcftools', 'sort', '-Oz', '-o', merged_vcf, merged_unsorted_vcf]
-    try:
-        print(f"Sorting merged VCF file...")
-        subprocess.run(cmd_sort, check=True)
-        print(f"Sorted merged VCF written to: {merged_vcf}")
-    except subprocess.CalledProcessError as e:
-        print(f"Error sorting merged VCF file:\n{e}")
-        raise
-
-    return merged_vcf
-
-
+    merged_vcf = util.merge_vcf_files(vcf_files, merged_vcf_fp)
+    return pcgr_dir
 
 def set_filter_pass(input_fp, tumor_name, output_dir):
     output_fp = output_dir / f'{tumor_name}.set_filter_pass.vcf.gz'
@@ -252,47 +222,6 @@ def panel_of_normal_annotations(input_fp, tumor_name, threads, pon_dir, output_d
 
     util.execute_command(command)
     return output_fp
-
-def split_vcf(input_vcf, output_dir, max_variants=10000):
-    """
-    Splits a VCF file into multiple chunks, each containing up to max_variants variants.
-    Each chunk includes the VCF header.
-    """
-    # Ensure output_dir exists
-    # Count total number of variants using util.count_vcf_records
-    total_variants = util.count_vcf_records(input_vcf)
-    print(f"Total number of variants in the input VCF: {total_variants}")
-
-    chunk_files = []
-    chunk_number = 1
-    variant_count = 0
-    base_filename = os.path.splitext(os.path.basename(input_vcf))[0]
-    chunk_filename = os.path.join(output_dir, f"{base_filename}_chunk{chunk_number}.vcf")
-    chunk_files.append(chunk_filename)
-
-    # Open the input VCF using pysam
-    vcf_in = pysam.VariantFile(input_vcf, 'r')
-    # Create a new VCF file for the first chunk
-    vcf_out = pysam.VariantFile(chunk_filename, 'w', header=vcf_in.header)
-
-    for record in vcf_in:
-        if variant_count >= max_variants:
-            # Close the current chunk file and start a new one
-            vcf_out.close()
-            chunk_number += 1
-            chunk_filename = os.path.join(output_dir, f"{base_filename}_chunk{chunk_number}.vcf")
-            chunk_files.append(chunk_filename)
-            vcf_out = pysam.VariantFile(chunk_filename, 'w', header=vcf_in.header)
-            variant_count = 0
-        # Write the record to the current chunk
-        vcf_out.write(record)
-        variant_count += 1
-
-    # Close the last chunk file
-    vcf_out.close()
-    vcf_in.close()
-
-    return chunk_files
 
 def select_variants(input_fp, tumor_name, cancer_genes_fp, output_dir):
     # Exclude variants until we hopefully move the needle below the threshold
