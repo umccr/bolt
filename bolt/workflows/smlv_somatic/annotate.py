@@ -100,9 +100,6 @@ def entry(ctx, **kwargs):
         kwargs['cancer_genes_fp'],
         output_dir,
     )
-   # if not (pcgr_prep_input_fp := selection_data.get('filtered')):
-       # pcgr_prep_input_fp = selection_data['selected']
-    # Prepare VCF for PCGR annotation
     pcgr_prep_fp = pcgr.prepare_vcf_somatic(
         pon_fp,
         kwargs['tumor_name'],
@@ -150,7 +147,7 @@ def run_somatic_chunck(vcf_chunks,pcgr_data_dir, output_dir,pcgr_output_dir, thr
     output_dirs = []
     with concurrent.futures.ProcessPoolExecutor() as executor:
         futures = {executor.submit(pcgr.run_somatic, vcf_file, pcgr_data_dir, pcgr_output_dir, chunk_number, threads, pcgr_conda,pcgrr_conda): chunk_number 
-                   for chunk_number, vcf_file in enumerate(vcf_chunks, start=1)}
+                for chunk_number, vcf_file in enumerate(vcf_chunks, start=1)}
         for future in concurrent.futures.as_completed(futures):
             try:
                 result_dir = future.result()
@@ -180,7 +177,7 @@ def merging_pcgr_files(output_dir, output_dirs):
     util.merge_tsv_files(tsv_files, merged_tsv_fp)
     # Step 5: Merge all VCF files into a single file in the pcgr directory
     merged_vcf_fp = os.path.join(pcgr_dir, "nosampleset.pcgr_acmg.grch38")
-    merged_vcf = util.merge_vcf_files(vcf_files, merged_vcf_fp)
+    util.merge_vcf_files(vcf_files, merged_vcf_fp)
     return pcgr_dir
 
 def set_filter_pass(input_fp, tumor_name, output_dir):
