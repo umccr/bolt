@@ -18,25 +18,39 @@ def get_project_root():
 
 
 def execute_command(command):
-    command_prepared = command_prepare(command)
+    """
+    Executes a shell command.
 
-    print(command_prepared)
+    Parameters:
+    - command: Command to be executed as a formatted string.
 
-    process = subprocess.run(
-        command_prepared,
-        shell=True,
-        executable='/bin/bash',
-        capture_output=True,
-        encoding='utf-8',
-    )
+    Raises:
+    - SystemExit if the command fails.
+    """
+    print('Executing command:')
+    print(command.strip())
 
-    if process.returncode != 0:
-        print(process)
-        print(process.stderr)
+    try:
+        process = subprocess.run(
+            command,
+            shell=True,
+            executable='/bin/bash',
+            check=True,
+            capture_output=True,
+            text=True
+        )
+        if process.stdout:
+            print(process.stdout)
+        if process.stderr:
+            print(process.stderr)
+        return process
+    except subprocess.CalledProcessError as e:
+        print(f"Command failed with exit code {e.returncode}")
+        if e.stdout:
+            print(f"Standard output:\n{e.stdout}")
+        if e.stderr:
+            print(f"Standard error:\n{e.stderr}")
         sys.exit(1)
-
-    return process
-
 
 def command_prepare(command):
     return f'set -o pipefail; {textwrap.dedent(command)}'
@@ -102,22 +116,17 @@ def get_qualified_vcf_annotation(anno_enum):
 #    assert filter_enum.value not in existing_filters
 #    return ';'.join([*existing_filters, filter_enum.value])
 
-def split_vcf(input_vcf, output_dir, max_variants=100000000):
+def split_vcf(input_vcf, output_dir):
     """
     Splits a VCF file into multiple chunks, each containing up to max_variants variants.
     Each chunk includes the VCF header.
     """
-    # Ensure output_dir exists
-    # Count total number of variants using util.count_vcf_records
-    total_variants = count_vcf_records(input_vcf)
-    print(f"Total number of variants in the input VCF: {total_variants}")
-
 
     chunk_files = []
     chunk_number = 1
     variant_count = 0
-    base_filename = os.path.splitext(os.path.basename(input_vcf))[0]
-    chunk_filename = os.path.join(output_dir, f"{base_filename}_chunk{chunk_number}.vcf")
+    base_filename = input_vcf.stem
+    chunk_filename = output_dir / f"{base_filename}_chunk{chunk_number}.vcf"
     chunk_files.append(chunk_filename)
 
     # Open the input VCF using pysam
@@ -126,11 +135,11 @@ def split_vcf(input_vcf, output_dir, max_variants=100000000):
     vcf_out = pysam.VariantFile(chunk_filename, 'w', header=vcf_in.header)
 
     for record in vcf_in:
-        if variant_count >= max_variants:
+        if variant_count >= 300000: #constants.MAX_SOMATIC_VARIANTS
             # Close the current chunk file and start a new one
             vcf_out.close()
             chunk_number += 1
-            chunk_filename = os.path.join(output_dir, f"{base_filename}_chunk{chunk_number}.vcf")
+            chunk_filename = output_dir / f"{base_filename}_chunk{chunk_number}.vcf"
             chunk_files.append(chunk_filename)
             vcf_out = pysam.VariantFile(chunk_filename, 'w', header=vcf_in.header)
             variant_count = 0
@@ -162,24 +171,75 @@ def merge_tsv_files(tsv_files, merged_tsv_fp):
 
 
 def merge_vcf_files(vcf_files, merged_vcf_fp):
-    merged_unsorted_vcf = merged_vcf_fp + '.unsorted.vcf.gz'
-    merged_vcf = merged_vcf_fp + '.vcf.gz'
-    cmd = ['bcftools', 'merge', '-m', 'all', '-Oz', '-o', merged_unsorted_vcf] + vcf_files
+    """
+    Merges multiple VCF files into a single sorted VCF file using bcftools.
+
+    Parameters:
+    - vcf_files: List of paths to VCF files to be merged.
+    - merged_vcf_fp: Path to the output merged VCF file (without extension).
+
+    Returns:
+    - Path to the sorted merged VCF file.
+    """
+    merged_vcf_fp = pathlib.Path(merged_vcf_fp)
+    merged_unsorted_vcf = merged_vcf_fp.with_suffix('.unsorted.vcf.gz')
+    merged_vcf = merged_vcf_fp.with_suffix('.vcf.gz')
+
+    # Prepare the bcftools merge command arguments
+    command_args = [
+        f'bcftools merge',
+        f'-m all',
+        f'-Oz',
+        f'-o {merged_unsorted_vcf}',
+    ] + [str(vcf_file) for vcf_file in vcf_files]
+
+    # Format the command for readability
+    delimiter_padding = ' ' * 10
+    delimiter = f' \\\n{delimiter_padding}'
+    command_args_str = delimiter.join(command_args)
+
+    command = f'''
+    {command_args_str}
+    '''
+
     # Run the bcftools merge command
-    try:
-        print("Running bcftools merge...")
-        subprocess.run(cmd, check=True)
-        print(f"Merged VCF written to: {merged_unsorted_vcf}")
-    except subprocess.CalledProcessError as e:
-        print(f"Error merging VCF files with bcftools:\n{e}")
-        raise
+    print("Running bcftools merge...")
+    execute_command(command)
+    print(f"Merged VCF written to: {merged_unsorted_vcf}")
 
     # Sort the merged VCF file
-    cmd_sort = ['bcftools', 'sort', '-Oz', '-o', merged_vcf, merged_unsorted_vcf]
-    try:
-        print(f"Sorting merged VCF file...")
-        subprocess.run(cmd_sort, check=True)
-        print(f"Sorted merged VCF written to: {merged_vcf}")
-    except subprocess.CalledProcessError as e:
-        print(f"Error sorting merged VCF file:\n{e}")
-        raise
+    sort_command_args = [
+        f'bcftools sort',
+        f'-Oz',
+        f'-o {merged_vcf}',
+        f'{merged_unsorted_vcf}'
+    ]
+    sort_command_args_str = delimiter.join(sort_command_args)
+    sort_command = f'''
+    {sort_command_args_str}
+    '''
+
+    print("Sorting merged VCF file...")
+    execute_command(sort_command)
+    print(f"Sorted merged VCF written to: {merged_vcf}")
+
+    # Index the sorted merged VCF file
+    index_command_args = [
+        f'bcftools index',
+        f'-t',
+        f'{merged_vcf}'
+    ]
+    index_command_args_str = delimiter.join(index_command_args)
+    index_command = f'''
+    {index_command_args_str}
+    '''
+
+    print("Indexing sorted merged VCF file...")
+    execute_command(index_command)
+    print(f"Indexed merged VCF file: {merged_vcf}.tbi")
+
+    # Optionally, remove the unsorted merged VCF file
+    if merged_unsorted_vcf.exists():
+        merged_unsorted_vcf.unlink()
+
+    return merged_vcf
