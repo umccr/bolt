@@ -183,6 +183,3 @@ def merge_vcf_files(vcf_files, merged_vcf_fp):
     except subprocess.CalledProcessError as e:
         print(f"Error sorting merged VCF file:\n{e}")
         raise
-
-    return merged_vcf
-
