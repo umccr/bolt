@@ -199,10 +199,8 @@ def run_somatic(input_fp, pcgr_refdata_dir, pcgr_output_dir, chunk_nbr=None, thr
     # Run the command and redirect output to the log file
     util.execute_command(command, log_file_path=log_file_path)
 
-    shutil.copytree(temp_dir.name, output_dir)
-
-    pcgr_tsv_fp = pathlib.Path(output_dir) / f'{sample_id}.pcgr_acmg.grch38.snvs_indels.tiers.tsv'
-    pcgr_vcf_fp = pathlib.Path(output_dir) / f'{sample_id}.pcgr_acmg.grch38.vcf.gz'
+    pcgr_tsv_fp = pathlib.Path(pcgr_output_dir) / 'nosampleset.pcgr_acmg.grch38.snvs_indels.tiers.tsv'
+    pcgr_vcf_fp = pathlib.Path(pcgr_output_dir) / 'nosampleset.pcgr_acmg.grch38.vcf.gz'
 
     # Check if both files exist
     if not pcgr_tsv_fp.exists(): 
@@ -267,7 +265,7 @@ def run_germline(input_fp, panel_fp, pcgr_refdata_dir, vep_dir, output_dir, thre
     return cpsr_output_dir
 
 
-def transfer_annotations_somatic(input_fp, tumor_name, pcgr_vcf_fp, pcgr_tsv_fp, output_dir):
+def transfer_annotations_somatic(input_fp, tumor_name, filter_name, pcgr_tsv_fp, pcgr_vcf_fp, output_dir):
     # Set destination INFO field names and source TSV fields
     info_field_map = {
         constants.VcfInfo.PCGR_MUTATION_HOTSPOT: 'MUTATION_HOTSPOT',
@@ -275,9 +273,6 @@ def transfer_annotations_somatic(input_fp, tumor_name, pcgr_vcf_fp, pcgr_tsv_fp,
         constants.VcfInfo.PCGR_TCGA_PANCANCER_COUNT: 'TCGA_PANCANCER_COUNT',
         constants.VcfInfo.PCGR_CSQ: 'CSQ',
     }
-
-    pcgr_tsv_fp = pathlib.Path(output_dir) / 'nosampleset.pcgr_acmg.grch38.snvs_indels.tiers.tsv'
-    pcgr_vcf_fp = pathlib.Path(output_dir) / 'nosampleset.pcgr_acmg.grch38.vcf.gz'
 
     # Enforce matching defined and source INFO annotations
     check_annotation_headers(info_field_map, pcgr_vcf_fp)

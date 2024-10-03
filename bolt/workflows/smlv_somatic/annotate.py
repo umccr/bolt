@@ -107,14 +107,16 @@ def entry(ctx, **kwargs):
         output_dir,
     )
 
-    vcf_chunks = util.split_vcf(
-        pcgr_prep_fp,
-        output_dir
-    )
-    # Run PCGR
     pcgr_output_dir = output_dir / 'pcgr'
-    if len(vcf_chunks) > 1 :
-        run_somatic_chunck(
+    total_variants = util.count_vcf_records(pcgr_prep_fp)
+    print(f"Total number of variants in the input VCF: {total_variants}")
+
+    if total_variants > constants.MAX_SOMATIC_VARIANTS:
+        vcf_chunks = util.split_vcf(
+            pcgr_prep_fp,
+            output_dir
+        )
+        pcgr_tsv_fp, pcgr_vcf_fp = run_somatic_chunck(
         vcf_chunks,
         kwargs['pcgr_data_dir'],
         output_dir,
@@ -124,8 +126,8 @@ def entry(ctx, **kwargs):
         kwargs['pcgrr_conda']
     )
     else:
-        pcgr.run_somatic(
-        vcf_chunks[0],
+        pcgr_tsv_fp, pcgr_vcf_fp = pcgr.run_somatic(
+        pcgr_prep_fp,
         kwargs['pcgr_data_dir'],
         pcgr_output_dir,
         chunk_nbr=None,
@@ -139,46 +141,41 @@ def entry(ctx, **kwargs):
         selection_data['selected'],
         kwargs['tumor_name'],
         selection_data.get('filter_name'),
-        pcgr_output_dir,
+        pcgr_tsv_fp,
+        pcgr_vcf_fp,
         output_dir,
     )
 
 def run_somatic_chunck(vcf_chunks,pcgr_data_dir, output_dir,pcgr_output_dir, threads, pcgr_conda, pcgrr_conda):
-    output_dirs = []
+    pcgr_tsv_files = []
+    pcgr_vcf_files = []
     with concurrent.futures.ProcessPoolExecutor() as executor:
         futures = {executor.submit(pcgr.run_somatic, vcf_file, pcgr_data_dir, pcgr_output_dir, chunk_number, threads, pcgr_conda,pcgrr_conda): chunk_number 
                 for chunk_number, vcf_file in enumerate(vcf_chunks, start=1)}
         for future in concurrent.futures.as_completed(futures):
             try:
-                result_dir = future.result()
-                if result_dir:
-                    output_dirs.append(result_dir)
+                pcgr_tsv_fp, pcgr_vcf_fp = future.result()
+                if pcgr_tsv_fp:
+                    pcgr_tsv_files.append(pcgr_tsv_fp)
+                if pcgr_vcf_fp:
+                    pcgr_vcf_files.append(pcgr_vcf_fp)
             except Exception as e:
                 print(f"Exception occurred: {e}")
 
-    pcgr_dir = merging_pcgr_files(output_dir, output_dirs)
-    return pcgr_dir
+    merged_vcf_fp, merged_tsv_fp = merging_pcgr_files(output_dir, pcgr_vcf_files, pcgr_tsv_fp)
+    return merged_vcf_fp, merged_tsv_fp
 
-def merging_pcgr_files(output_dir, output_dirs):
+def merging_pcgr_files(output_dir, pcgr_vcf_files, pcgr_tsv_fp):
     # Step 3: Merge all chunk VCF files into a single file
     pcgr_dir = output_dir / 'pcgr/'
     pcgr_dir.mkdir(exist_ok=True)
-    tsv_files = []
-    vcf_files = []
-    for pcgr_dir_chunk in output_dirs:
-        pcgr_tsv_fp = pathlib.Path(pcgr_dir_chunk) / 'nosampleset.pcgr_acmg.grch38.snvs_indels.tiers.tsv'
-        pcgr_vcf_fp = pathlib.Path(pcgr_dir_chunk) / 'nosampleset.pcgr_acmg.grch38.vcf.gz'
-        if pcgr_tsv_fp.exists():
-            tsv_files.append(str(pcgr_tsv_fp))
-        if pcgr_vcf_fp.exists():
-            vcf_files.append(str(pcgr_vcf_fp))
-    # Step 4: Merge all TSV files into a single file in the pcgr directory
+    # Merge all TSV files into a single file in the pcgr directory    merged_tsv_fp = os.path.join(pcgr_dir, "nosampleset.pcgr_acmg.grch38.snvs_indels.tiers.tsv")
     merged_tsv_fp = os.path.join(pcgr_dir, "nosampleset.pcgr_acmg.grch38.snvs_indels.tiers.tsv")
-    util.merge_tsv_files(tsv_files, merged_tsv_fp)
+    util.merge_tsv_files(pcgr_tsv_fp, merged_tsv_fp)
     # Step 5: Merge all VCF files into a single file in the pcgr directory
     merged_vcf_fp = os.path.join(pcgr_dir, "nosampleset.pcgr_acmg.grch38")
-    util.merge_vcf_files(vcf_files, merged_vcf_fp)
-    return pcgr_dir
+    util.merge_vcf_files(pcgr_vcf_files, merged_vcf_fp)
+    return merged_vcf_fp, merged_tsv_fp
 
 def set_filter_pass(input_fp, tumor_name, output_dir):
     output_fp = output_dir / f'{tumor_name}.set_filter_pass.vcf.gz'
