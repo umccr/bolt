@@ -118,11 +118,14 @@ def split_vcf(input_vcf, output_dir):
     """
     output_dir = pathlib.Path(output_dir / "vcf_chunks")
     output_dir.mkdir(parents=True, exist_ok=True)
+    """
 
     chunk_files = []
     chunk_number = 1
     variant_count = 0
     base_filename = pathlib.Path(input_vcf).stem
+    chunk_filename = output_dir / f"{base_filename}_chunk{chunk_number}.vcf"
+    base_filename = input_vcf.stem
     chunk_filename = output_dir / f"{base_filename}_chunk{chunk_number}.vcf"
     chunk_files.append(chunk_filename)
 
