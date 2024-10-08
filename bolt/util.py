@@ -44,7 +44,8 @@ def execute_command(command):
             executable='/bin/bash',
             check=True,
             capture_output=True,
-            text=True
+            text=True,
+            encoding='utf-8'
         )
         if process.stdout:
             print(process.stdout)
