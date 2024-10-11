@@ -2,7 +2,6 @@ import gzip
 import pathlib
 import subprocess
 import sys
-import os
 import textwrap
 import pysam
 
