@@ -3,7 +3,6 @@ import pathlib
 import re
 import shutil
 import tempfile
-import time
 
 import cyvcf2
 
@@ -116,13 +115,9 @@ def run_somatic(input_fp, pcgr_refdata_dir, pcgr_output_dir, chunk_nbr=None, thr
     # temporary directory outside of the FusionFS mounted directory then manually copy across
 
     temp_dir = tempfile.TemporaryDirectory()
-    pcgr_output_dir = pcgr_output_dir / f"{chunk_nbr}" if chunk_nbr is not None else pcgr_output_dir    # Check if the output directory already exists
+    pcgr_output_dir = pcgr_output_dir / f"pcgr_{chunk_nbr}" if chunk_nbr is not None else pcgr_output_dir / f"pcgr"  # Check if the output directory already exists
     if pcgr_output_dir.exists():
-        print(f"Warning: Output directory '{pcgr_output_dir}' already exists.")
-        print("Waiting for 3 seconds before overwriting...")
-        #time.sleep(3)  # Wait for 3 seconds
-
-        # If the user chooses to continue, delete the existing directory
+        print(f"Warning: Output directory '{pcgr_output_dir}' already exists and will be overwrited")
         shutil.rmtree(pcgr_output_dir)
 
 
@@ -257,7 +252,7 @@ def run_germline(input_fp, panel_fp, pcgr_refdata_dir, output_dir, threads=1, pc
     return cpsr_output_dir
 
 
-def transfer_annotations_somatic(input_fp, tumor_name, filter_name, pcgr_tsv_fp, pcgr_vcf_fp, output_dir):
+def transfer_annotations_somatic(input_fp, tumor_name, filter_name, pcgr_vcf_fp, pcgr_tsv_fp, output_dir):
     # Set destination INFO field names and source TSV fields
     info_field_map = {
         constants.VcfInfo.PCGR_MUTATION_HOTSPOT: 'MUTATION_HOTSPOT',
