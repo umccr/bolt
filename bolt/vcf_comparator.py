@@ -22,7 +22,6 @@ def compare_vcf_records(record1, record2):
             if 'PCGR_CSQ' in value1 or 'PCGR_CSQ' in value2:
                 pcgr_csq1 = value1.get('PCGR_CSQ', '').split(',')
                 pcgr_csq2 = value2.get('PCGR_CSQ', '').split(',')
-                order_diff_count = 0
                 max_len = max(len(pcgr_csq1), len(pcgr_csq2))
                 for i in range(max_len):
                     csq1 = pcgr_csq1[i] if i < len(pcgr_csq1) else ''
@@ -30,9 +29,8 @@ def compare_vcf_records(record1, record2):
                     csq1_split = sorted(csq1.split('&'))
                     csq2_split = sorted(csq2.split('&'))
                     if csq1_split != csq2_split:
-                        order_diff_count += 1
-                if order_diff_count > 0:
-                    differences['PCGR_CSQ_order_diff_count'] = order_diff_count
+                        differences['PCGR_CSQ_order_diff'] = True
+                        break
             # Compare other INFO fields individually
             for key in set(value1.keys()).union(set(value2.keys())):
                 if key != 'PCGR_CSQ' and value1.get(key) != value2.get(key):
@@ -63,22 +61,24 @@ def main():
 
     # Compare annotations for common records
     annotation_differences = {}
+    order_diff_count_total = 0
     for key in common_records:
         record1 = records_vcf1[key]
         record2 = records_vcf2[key]
         differences = compare_vcf_records(record1, record2)
+        if 'PCGR_CSQ_order_diff' in differences:
+            order_diff_count_total += 1
+            differences.pop('PCGR_CSQ_order_diff', None)
         if differences:
             annotation_differences[key] = differences
 
     # Output results
-    print(f"Number of common records with different annotations: {len(annotation_differences)}")
+    print(f"Number of common records with different order annotations: {order_diff_count_total}")
+    print(f"Number of common records with actual differences: {len(annotation_differences)}")
     for key, diffs in annotation_differences.items():
         print(f"Differences for record {key}: ")
         for field, values in diffs.items():
-            if field == 'PCGR_CSQ_order_diff_count':
-                print(f"  {field}: {values} times the order differs between file1 and file2")
-            else:
-                print(f"  {field}: {values['file1']} (file1) vs {values['file2']} (file2)")
+            print(f"  {field}: {values['file1']} (file1) vs {values['file2']} (file2)")
 
 if __name__ == "__main__":
     main()
