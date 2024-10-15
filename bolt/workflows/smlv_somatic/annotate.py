@@ -140,8 +140,8 @@ def entry(ctx, **kwargs):
         selection_data['selected'],
         kwargs['tumor_name'],
         selection_data.get('filter_name'),
-        pcgr_tsv_fp,
         pcgr_vcf_fp,
+        pcgr_tsv_fp,
         output_dir,
     )
 
@@ -150,16 +150,19 @@ def run_somatic_chunck(vcf_chunks, pcgr_data_dir, output_dir, pcgr_output_dir, m
     pcgr_vcf_files = []
     
     num_chunks = len(vcf_chunks)
-    threads_per_chunk = max(1, max_threads // num_chunks)
-    # TODO optimize remanings threads remaining_threads = max_threads % num_chunks
+    # Ensure we don't use more workers than available threads, and each worker has at least 2 threads
+    max_workers = min(num_chunks, max_threads // 2)
+    threads_quot, threads_rem = divmod(max_threads, num_chunks)
+    threads_per_chunk = max(2, threads_quot)
 
-
-    # Limit the number of workers to the number of threads specified
-    with concurrent.futures.ProcessPoolExecutor(max_workers=max_threads) as executor:
-        futures = {
-            executor.submit(pcgr.run_somatic, vcf_file, pcgr_data_dir, pcgr_output_dir, chunk_number, threads_per_chunk, pcgr_conda, pcgrr_conda): chunk_number
-            for chunk_number, vcf_file in enumerate(vcf_chunks, start=1)
-        }
+    # Limit the number of workers to the smaller of num_chunks or max_threads // 2
+    with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
+        futures = {}
+        for chunk_number, vcf_file in enumerate(vcf_chunks, start=1):
+            # Assign extra thread to the first 'threads_rem' chunks
+            additional_thread = 1 if chunk_number <= threads_rem else 0
+            total_threads = threads_per_chunk + additional_thread
+            futures[executor.submit(pcgr.run_somatic, vcf_file, pcgr_data_dir, pcgr_output_dir, chunk_number, total_threads, pcgr_conda, pcgrr_conda)] = chunk_number
 
         for future in concurrent.futures.as_completed(futures):
             try:
@@ -172,7 +175,7 @@ def run_somatic_chunck(vcf_chunks, pcgr_data_dir, output_dir, pcgr_output_dir, m
                 print(f"Exception occurred: {e}")
 
     merged_vcf_fp, merged_tsv_fp = merging_pcgr_files(output_dir, pcgr_vcf_files, pcgr_tsv_files)
-    return merged_vcf_fp, merged_tsv_fp
+    return merged_tsv_fp, merged_vcf_fp
 
 def merging_pcgr_files(output_dir, pcgr_vcf_files, pcgr_tsv_fp):
     # Step 3: Merge all chunk VCF files into a single file

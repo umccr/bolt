@@ -114,19 +114,6 @@ def split_vcf(input_vcf, output_dir):
     Each chunk includes the VCF header.
     Ensures no overlapping positions between chunks.
     """
-    output_dir = pathlib.Path(output_dir / "vcf_chunks")
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-#def add_vcf_filter(record, filter_enum):
-#    existing_filters = [e for e in record.FILTERS if e != 'PASS']
-#    assert filter_enum.value not in existing_filters
-#    return ';'.join([*existing_filters, filter_enum.value])
-
-def split_vcf(input_vcf, output_dir):
-    """
-    Splits a VCF file into multiple chunks, each containing up to max_variants variants.
-    Each chunk includes the VCF header.
-    """
 
     chunk_files = []
     chunk_number = 1
@@ -140,8 +127,11 @@ def split_vcf(input_vcf, output_dir):
     # Create a new VCF file for the first chunk
     vcf_out = pysam.VariantFile(chunk_filename, 'w', header=vcf_in.header)
 
+    last_position = None
+
     for record in vcf_in:
-        if variant_count >= 300000: #constants.MAX_SOMATIC_VARIANTS
+        # Check if we need to start a new chunk
+        if variant_count >= 300000 and (last_position is None or record.POS != last_position):
             # Close the current chunk file and start a new one
             vcf_out.close()
             chunk_number += 1
@@ -149,9 +139,11 @@ def split_vcf(input_vcf, output_dir):
             chunk_files.append(chunk_filename)
             vcf_out = pysam.VariantFile(chunk_filename, 'w', header=vcf_in.header)
             variant_count = 0
+
         # Write the record to the current chunk
         vcf_out.write(record)
         variant_count += 1
+        last_position = record.POS
 
     # Close the last chunk file
     vcf_out.close()
