@@ -3,7 +3,8 @@ import pathlib
 import subprocess
 import sys
 import textwrap
-import pysam
+import cyvcf2
+
 
 
 from .common import pcgr
