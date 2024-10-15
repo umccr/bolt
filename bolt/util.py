@@ -116,41 +116,41 @@ def split_vcf(input_vcf, output_dir):
     Each chunk includes the VCF header.
     Ensures no overlapping positions between chunks.
     """
-    output_dir = pathlib.Path(output_dir / "vcf_chunks")
+    output_dir = pathlib.Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    """
 
     chunk_files = []
     chunk_number = 1
     variant_count = 0
-    base_filename = input_vcf.stem
+    base_filename = pathlib.Path(input_vcf).stem
     chunk_filename = output_dir / f"{base_filename}_chunk{chunk_number}.vcf"
     base_filename = input_vcf.stem
     chunk_filename = output_dir / f"{base_filename}_chunk{chunk_number}.vcf"
     chunk_files.append(chunk_filename)
 
-    # Open the input VCF using pysam
-    vcf_in = pysam.VariantFile(input_vcf, 'r')
+    # Open the input VCF using cyvcf2
+    vcf_in = cyvcf2.VCF(input_vcf)
     # Create a new VCF file for the first chunk
-    vcf_out = pysam.VariantFile(chunk_filename, 'w', header=vcf_in.header)
+    vcf_out = cyvcf2.Writer(str(chunk_filename), vcf_in)
 
     last_position = None
 
     for record in vcf_in:
+        current_position = record.POS
         # Check if we need to start a new chunk
-        if variant_count >= 300000 and (last_position is None or record.POS != last_position):
+        if variant_count >= 15000 and (last_position is None or current_position != last_position):
             # Close the current chunk file and start a new one
             vcf_out.close()
             chunk_number += 1
             chunk_filename = output_dir / f"{base_filename}_chunk{chunk_number}.vcf"
             chunk_files.append(chunk_filename)
-            vcf_out = pysam.VariantFile(chunk_filename, 'w', header=vcf_in.header)
+            vcf_out = cyvcf2.Writer(str(chunk_filename), vcf_in)
             variant_count = 0
 
         # Write the record to the current chunk
-        vcf_out.write(record)
+        vcf_out.write_record(record)
         variant_count += 1
-        last_position = record.POS
+        last_position = current_position
 
     # Close the last chunk file
     vcf_out.close()
