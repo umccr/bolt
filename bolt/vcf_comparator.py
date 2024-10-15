@@ -41,8 +41,8 @@ def compare_vcf_records(record1, record2):
 
 def main():
     parser = argparse.ArgumentParser(description="Compare two VCF files record by record.")
-    parser.add_argument("vcf_file1", help="Path to the first VCF file")
-    parser.add_argument("vcf_file2", help="Path to the second VCF file")
+    parser.add_argument("vcf_file1", help="Path to the first VCF file (original)")
+    parser.add_argument("vcf_file2", help="Path to the second VCF file (new version)")
     args = parser.parse_args()
 
     vcf_file1 = args.vcf_file1
@@ -55,8 +55,8 @@ def main():
     records_only_in_vcf2 = set(records_vcf2.keys()) - set(records_vcf1.keys())
     common_records = set(records_vcf1.keys()).intersection(records_vcf2.keys())
 
-    print(f"Records only in {vcf_file1}: {len(records_only_in_vcf1)}")
-    print(f"Records only in {vcf_file2}: {len(records_only_in_vcf2)}")
+    print(f"Records only in {vcf_file1} (original): {len(records_only_in_vcf1)}")
+    print(f"Records only in {vcf_file2} (new version): {len(records_only_in_vcf2)}")
     print(f"Common records: {len(common_records)}")
 
     # Compare annotations for common records
@@ -75,10 +75,9 @@ def main():
     # Output results
     print(f"Number of common records with different order annotations: {order_diff_count_total}")
     print(f"Number of common records with actual differences: {len(annotation_differences)}")
-    for key, diffs in annotation_differences.items():
-        print(f"Differences for record {key}: ")
-        for field, values in diffs.items():
-            print(f"  {field}: {values['file1']} (file1) vs {values['file2']} (file2)")
+
+    # Output the count of records only in the new version
+    print(f"Number of records only in the new version ({vcf_file2}): {len(records_only_in_vcf2)}")
 
 if __name__ == "__main__":
     main()
