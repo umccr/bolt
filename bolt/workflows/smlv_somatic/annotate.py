@@ -87,12 +87,12 @@ def entry(ctx, **kwargs):
     #       - Hits in PCAWG [INFO/PCGR_ICGC_PCAWG_COUNT]
     # Set selected data or full input
 
-    selection_data = select_variants(
-        pon_fp,
-        kwargs['tumor_name'],
-        kwargs['cancer_genes_fp'],
-        output_dir,
-    )
+    # selection_data = select_variants(
+        # pon_fp,
+        # kwargs['tumor_name'],
+        # kwargs['cancer_genes_fp'],
+        # output_dir,
+    # )
     pcgr_prep_fp = pcgr.prepare_vcf_somatic(
         pon_fp,
         kwargs['tumor_name'],
@@ -131,9 +131,8 @@ def entry(ctx, **kwargs):
 
     # Transfer PCGR annotations to full set of variants
     pcgr.transfer_annotations_somatic(
-        selection_data['selected'],
+        pon_fp,
         kwargs['tumor_name'],
-        selection_data.get('filter_name'),
         pcgr_vcf_fp,
         pcgr_tsv_fp,
         output_dir,
