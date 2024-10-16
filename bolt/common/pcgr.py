@@ -260,7 +260,7 @@ def run_germline(input_fp, panel_fp, pcgr_refdata_dir, vep_dir, output_dir, thre
     return cpsr_output_dir
 
 
-def transfer_annotations_somatic(input_fp, tumor_name, filter_name, pcgr_vcf_fp, pcgr_tsv_fp, output_dir):
+def transfer_annotations_somatic(input_fp, tumor_name, pcgr_vcf_fp, pcgr_tsv_fp, output_dir):
     # Set destination INFO field names and source TSV fields
     info_field_map = {
         constants.VcfInfo.PCGR_MUTATION_HOTSPOT: 'MUTATION_HOTSPOT',
@@ -292,8 +292,8 @@ def transfer_annotations_somatic(input_fp, tumor_name, filter_name, pcgr_vcf_fp,
         # Do not process chrM since *snvs_indels.tiers.tsv does not include these annotations
         if record.CHROM == 'chrM':
             continue
-        # Annotate and write
-        record_ann = annotate_record(record, pcgr_data, allow_missing=True)
+
+        record_ann = annotate_record(record, pcgr_data)
         output_fh.write_record(record_ann)
 
 
