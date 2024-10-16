@@ -62,6 +62,7 @@ def main():
     # Compare annotations for common records
     annotation_differences = {}
     order_diff_count_total = 0
+    matching_annotations_count = 0
     for key in common_records:
         record1 = records_vcf1[key]
         record2 = records_vcf2[key]
@@ -71,12 +72,13 @@ def main():
             differences.pop('PCGR_CSQ_order_diff', None)
         if differences:
             annotation_differences[key] = differences
+        else:
+            matching_annotations_count += 1
 
     # Output results
+    print(f"Number of common records with matching annotations: {matching_annotations_count}")
     print(f"Number of common records with different order annotations: {order_diff_count_total}")
     print(f"Number of common records with actual differences: {len(annotation_differences)}")
-
-    # Output the count of records only in the new version
     print(f"Number of records only in the new version ({vcf_file2}): {len(records_only_in_vcf2)}")
 
 if __name__ == "__main__":
