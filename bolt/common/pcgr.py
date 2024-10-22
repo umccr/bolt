@@ -6,6 +6,7 @@ import pathlib
 import re
 import shutil
 import tempfile
+import logging
 
 import cyvcf2
 
@@ -121,7 +122,7 @@ def run_somatic(input_fp, pcgr_refdata_dir, pcgr_output_dir, chunk_nbr=None, thr
     temp_dir = tempfile.TemporaryDirectory()
     pcgr_output_dir = pcgr_output_dir / f"pcgr_{chunk_nbr}" if chunk_nbr is not None else pcgr_output_dir / f"pcgr"  # Check if the output directory already exists
     if pcgr_output_dir.exists():
-        print(f"Warning: Output directory '{pcgr_output_dir}' already exists and will be overwrited")
+        logger.warning(f"Warning: Output directory '{pcgr_output_dir}' already exists and will be overwrited")
         shutil.rmtree(pcgr_output_dir)
 
 

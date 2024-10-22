@@ -4,12 +4,13 @@ import subprocess
 import sys
 import textwrap
 import cyvcf2
-
-
+import logging
 
 from .common import pcgr
 from .common import constants
 
+# Set up logging
+logger = logging.getLogger(__name__)
 
 logger = logging.getLogger(__name__)
 
@@ -34,8 +35,9 @@ def execute_command(command):
     Raises:
     - SystemExit if the command fails.
     """
-    print('Executing command:')
-    print(command.strip())
+    logger.info("Starting execute_command function")
+    logger.info('Executing command:')
+    logger.info(command.strip())
 
     try:
         process = subprocess.run(
@@ -48,16 +50,16 @@ def execute_command(command):
             encoding='utf-8'
         )
         if process.stdout:
-            print(process.stdout)
+            logger.info(process.stdout)
         if process.stderr:
-            print(process.stderr)
+            logger.error(process.stderr)
         return process
     except subprocess.CalledProcessError as e:
-        print(f"Command failed with exit code {e.returncode}")
+        logger.error(f"Command failed with exit code {e.returncode}")
         if e.stdout:
-            print(f"Standard output:\n{e.stdout}")
+            logger.error(f"Standard output:\n{e.stdout}")
         if e.stderr:
-            print(f"Standard error:\n{e.stderr}")
+            logger.error(f"Standard error:\n{e.stderr}")
         sys.exit(1)
 
 def command_prepare(command):
@@ -153,7 +155,7 @@ def split_vcf(input_vcf, output_dir):
     vcf_out.close()
     vcf_in.close()
 
-    print(f"VCF file split into {len(chunk_files)} chunks.")
+    logger.info(f"VCF file split into {len(chunk_files)} chunks.")
 
     return chunk_files
 
@@ -169,7 +171,7 @@ def merge_tsv_files(tsv_files, merged_tsv_fp):
                     if i > 0 and line_number == 0:
                         continue
                     merged_tsv.write(line)
-    print(f"Merged TSV written to: {merged_tsv_fp}")
+    logger.info(f"Merged TSV written to: {merged_tsv_fp}")
 
 
 def merge_vcf_files(vcf_files, merged_vcf_fp):
@@ -205,9 +207,9 @@ def merge_vcf_files(vcf_files, merged_vcf_fp):
     '''
 
     # Run the bcftools merge command
-    print("Running bcftools merge...")
+    logger.info("Running bcftools merge...")
     execute_command(command)
-    print(f"Merged VCF written to: {merged_unsorted_vcf}")
+    logger.info(f"Merged VCF written to: {merged_unsorted_vcf}")
 
     # Sort the merged VCF file
     sort_command_args = [
@@ -221,9 +223,9 @@ def merge_vcf_files(vcf_files, merged_vcf_fp):
     {sort_command_args_str}
     '''
 
-    print("Sorting merged VCF file...")
+    logger.info("Sorting merged VCF file...")
     execute_command(sort_command)
-    print(f"Sorted merged VCF written to: {merged_vcf}")
+    logger.info(f"Sorted merged VCF written to: {merged_vcf}")
 
     # Index the sorted merged VCF file
     index_command_args = [
@@ -236,9 +238,9 @@ def merge_vcf_files(vcf_files, merged_vcf_fp):
     {index_command_args_str}
     '''
 
-    print("Indexing sorted merged VCF file...")
+    logger.info("Indexing sorted merged VCF file...")
     execute_command(index_command)
-    print(f"Indexed merged VCF file: {merged_vcf}.tbi")
+    logger.info(f"Indexed merged VCF file: {merged_vcf}.tbi")
 
     # Optionally, remove the unsorted merged VCF file
     if merged_unsorted_vcf.exists():

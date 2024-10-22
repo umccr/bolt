@@ -1,16 +1,16 @@
 import logging
+import os
 import pathlib
-
-
+import concurrent.futures
 import click
 import cyvcf2
-import concurrent.futures
 
 from ... import util
 from ...common import constants
 from ...common import pcgr
-import os
+from ...logging_config import setup_logging
 
+logger = logging.getLogger(__name__)
 
 @click.command(name='annotate')
 @click.pass_context
@@ -110,7 +110,7 @@ def entry(ctx, **kwargs):
     total_variants = util.count_vcf_records(pcgr_prep_fp)
     print(f"Total number of variants in the input VCF: {total_variants}")
 
-    if total_variants > constants.MAX_SOMATIC_VARIANTS:
+    if total_variants > 15000:
         vcf_chunks = util.split_vcf(
             pcgr_prep_fp,
             output_dir
@@ -143,11 +143,13 @@ def entry(ctx, **kwargs):
         pcgr_tsv_fp,
         output_dir,
     )
+    logger.info("Annotation process completed")
+
 
 def run_somatic_chunck(vcf_chunks, pcgr_data_dir, output_dir, pcgr_output_dir, max_threads, pcgr_conda, pcgrr_conda):
     pcgr_tsv_files = []
     pcgr_vcf_files = []
-    
+
     num_chunks = len(vcf_chunks)
     # Ensure we don't use more workers than available threads, and each worker has at least 2 threads
     max_workers = min(num_chunks, max_threads // 2)
