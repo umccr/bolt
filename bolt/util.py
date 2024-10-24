@@ -1,6 +1,5 @@
 import pathlib
 import subprocess
-import sys
 import textwrap
 import cyvcf2
 import logging
@@ -18,42 +17,51 @@ def get_project_root():
     return project_root
 
 
-def execute_command(command):
+def execute_command(command, log_file_path=None):
     """
     Executes a shell command.
 
     Parameters:
     - command: Command to be executed as a formatted string.
+    - log_file_path: Optional path to a log file to capture the command output.
 
     Raises:
     - SystemExit if the command fails.
     """
-    logger.info("Starting execute_command function")
     logger.info('Executing command:')
     logger.info(command.strip())
 
     try:
-        process = subprocess.run(
-            command,
-            shell=True,
-            executable='/bin/bash',
-            check=True,
-            capture_output=True,
-            text=True,
-            encoding='utf-8'
-        )
-        if process.stdout:
-            logger.info(process.stdout)
-        if process.stderr:
-            logger.error(process.stderr)
-        return process
+        if log_file_path:
+            with open(log_file_path, 'w') as log_file:
+                process = subprocess.run(
+                    command,
+                    shell=True,
+                    executable='/bin/bash',
+                    check=True,
+                    stdout=log_file,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    encoding='utf-8'
+                )
+        else:
+            process = subprocess.run(
+                command,
+                shell=True,
+                executable='/bin/bash',
+                check=True,
+                capture_output=True,
+                text=True,
+                encoding='utf-8'
+            )
+            if process.stdout:
+                logger.info(process.stdout)
+            if process.stderr:
+                logger.error(process.stderr)
+            return(process)
     except subprocess.CalledProcessError as e:
-        logger.error(f"Command failed with exit code {e.returncode}")
-        if e.stdout:
-            logger.error(f"Standard output:\n{e.stdout}")
-        if e.stderr:
-            logger.error(f"Standard error:\n{e.stderr}")
-        sys.exit(1)
+        logger.error(f"Command failed with error: {e}")
+        raise SystemExit(e)
 
 def command_prepare(command):
     return f'set -o pipefail; {textwrap.dedent(command)}'
