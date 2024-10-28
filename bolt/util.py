@@ -127,7 +127,7 @@ def split_vcf(input_vcf, output_dir):
     Each chunk includes the VCF header.
     Ensures no overlapping positions between chunks.
     """
-    output_dir = pathlib.Path(output_dir)
+    output_dir = pathlib.Path(output_dir / "vcf_chunks")
     output_dir.mkdir(parents=True, exist_ok=True)
 
     chunk_files = []
@@ -153,7 +153,7 @@ def split_vcf(input_vcf, output_dir):
             # Close the current chunk file and start a new one
             vcf_out.close()
             chunk_number += 1
-            chunk_filename = output_dir / "vcf_chunks" / f"{base_filename}_chunk{chunk_number}.vcf"
+            chunk_filename = output_dir / f"{base_filename}_chunk{chunk_number}.vcf"
             chunk_files.append(chunk_filename)
             vcf_out = cyvcf2.Writer(str(chunk_filename), vcf_in)
             variant_count = 0
