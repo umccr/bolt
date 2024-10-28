@@ -294,7 +294,7 @@ def transfer_annotations_somatic(input_fp, tumor_name, pcgr_vcf_fp, pcgr_tsv_fp,
         # Do not process chrM since *snvs_indels.tiers.tsv does not include these annotations
         if record.CHROM == 'chrM':
             continue
-
+        # Annotate and write
         record_ann = annotate_record(record, pcgr_data)
         output_fh.write_record(record_ann)
 

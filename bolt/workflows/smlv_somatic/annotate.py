@@ -1,7 +1,5 @@
 import logging
-import os
 import pathlib
-import concurrent.futures
 import click
 import cyvcf2
 
@@ -108,7 +106,7 @@ def entry(ctx, **kwargs):
             pcgr_prep_fp,
             output_dir
         )
-        pcgr_tsv_fp, pcgr_vcf_fp = run_somatic_chunck(
+        pcgr_tsv_fp, pcgr_vcf_fp = util.run_somatic_chunck(
         vcf_chunks,
         kwargs['pcgr_data_dir'],
         output_dir,
@@ -138,51 +136,6 @@ def entry(ctx, **kwargs):
     )
     logger.info("Annotation process completed")
 
-
-def run_somatic_chunck(vcf_chunks, pcgr_data_dir, output_dir, pcgr_output_dir, max_threads, pcgr_conda, pcgrr_conda):
-    pcgr_tsv_files = []
-    pcgr_vcf_files = []
-
-    num_chunks = len(vcf_chunks)
-    # Ensure we don't use more workers than available threads, and each worker has at least 2 threads
-    max_workers = min(num_chunks, max_threads // 2)
-    threads_quot, threads_rem = divmod(max_threads, num_chunks)
-    threads_per_chunk = max(2, threads_quot)
-
-    # Limit the number of workers to the smaller of num_chunks or max_threads // 2
-    with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
-        futures = {}
-        for chunk_number, vcf_file in enumerate(vcf_chunks, start=1):
-            # Assign extra thread to the first 'threads_rem' chunks
-            additional_thread = 1 if chunk_number <= threads_rem else 0
-            total_threads = threads_per_chunk + additional_thread
-            futures[executor.submit(pcgr.run_somatic, vcf_file, pcgr_data_dir, pcgr_output_dir, chunk_number, total_threads, pcgr_conda, pcgrr_conda)] = chunk_number
-
-        for future in concurrent.futures.as_completed(futures):
-            try:
-                pcgr_tsv_fp, pcgr_vcf_fp = future.result()
-                if pcgr_tsv_fp:
-                    pcgr_tsv_files.append(pcgr_tsv_fp)
-                if pcgr_vcf_fp:
-                    pcgr_vcf_files.append(pcgr_vcf_fp)
-            except Exception as e:
-                print(f"Exception occurred: {e}")
-
-    merged_vcf_fp, merged_tsv_fp = merging_pcgr_files(output_dir, pcgr_vcf_files, pcgr_tsv_files)
-    return merged_tsv_fp, merged_vcf_fp
-
-def merging_pcgr_files(output_dir, pcgr_vcf_files, pcgr_tsv_fp):
-    # Step 3: Merge all chunk VCF files into a single file
-    pcgr_dir = output_dir / 'pcgr/'
-    pcgr_dir.mkdir(exist_ok=True)
-    # Merge all TSV files into a single file in the pcgr directory    merged_tsv_fp = os.path.join(pcgr_dir, "nosampleset.pcgr_acmg.grch38.snvs_indels.tiers.tsv")
-    merged_tsv_fp = os.path.join(pcgr_dir, "nosampleset.pcgr_acmg.grch38.snvs_indels.tiers.tsv")
-    util.merge_tsv_files(pcgr_tsv_fp, merged_tsv_fp)
-    # Step 5: Merge all VCF files into a single file in the pcgr directory
-    merged_vcf_path = os.path.join(pcgr_dir, "nosampleset.pcgr_acmg.grch38")
-    merged_vcf = util.merge_vcf_files(pcgr_vcf_files, merged_vcf_path)
-    return merged_vcf, merged_tsv_fp
-
 def set_filter_pass(input_fp, tumor_name, output_dir):
     output_fp = output_dir / f'{tumor_name}.set_filter_pass.vcf.gz'
 
@@ -195,7 +148,6 @@ def set_filter_pass(input_fp, tumor_name, output_dir):
         output_fh.write_record(record)
 
     return output_fp
-
 
 def general_annotations(input_fp, tumor_name, threads, annotations_dir, output_dir):
     toml_fp = pathlib.Path(annotations_dir) / 'vcfanno_annotations.toml'
