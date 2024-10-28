@@ -153,7 +153,7 @@ def split_vcf(input_vcf, output_dir):
             # Close the current chunk file and start a new one
             vcf_out.close()
             chunk_number += 1
-            chunk_filename = output_dir / f"{base_filename}_chunk{chunk_number}.vcf"
+            chunk_filename = output_dir / "vcf_chunks" / f"{base_filename}_chunk{chunk_number}.vcf"
             chunk_files.append(chunk_filename)
             vcf_out = cyvcf2.Writer(str(chunk_filename), vcf_in)
             variant_count = 0
