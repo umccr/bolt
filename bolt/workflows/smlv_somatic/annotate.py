@@ -78,7 +78,6 @@ def entry(ctx, **kwargs):
     )
 
     # Annotate with cancer-related and functional information from a range of sources using PCGR
-    #   - Select variants to process - there is an upper limit for PCGR of around 500k
     #   - Set tumor and normal AF and DP in INFO for PCGR and remove all other annotations
     #   - Run PCGR on minimal VCF (pcgr_prep_fp)
     #   - Transfer selected PCGR annotations to unfiltered VCF (selected_fp)
@@ -87,8 +86,10 @@ def entry(ctx, **kwargs):
     #       - Known mutation hotspot [INFO/PCGR_MUTATION_HOTSPOT]
     #       - ClinVar clinical significant [INFO/PCGR_CLNSIG]
     #       - Hits in TCGA [INFO/PCGR_TCGA_PANCANCER_COUNT]
-    # Set selected data or full input
-    selection_data = select_variants(
+    #       - Hits in PCAWG [INFO/PCGR_ICGC_PCAWG_COUNT]
+
+    # Prepare VCF for PCGR annotation
+    pcgr_prep_fp = pcgr.prepare_vcf_somatic(
         pon_fp,
         kwargs['tumor_name'],
         kwargs['cancer_genes_fp'],
@@ -106,9 +107,18 @@ def entry(ctx, **kwargs):
         output_dir,
     )
 
-    # Run PCGR
-    pcgr_dir = pcgr.run_somatic(
-        pcgr_prep_fp,
+    pcgr_output_dir = output_dir / 'pcgr'
+    total_variants = util.count_vcf_records(pcgr_prep_fp)
+    print(f"Total number of variants in the input VCF: {total_variants}")
+
+    # Run PCGR in chunks if the total number of variants exceeds the maximum allowed for somatic variants
+    if total_variants > constants.MAX_SOMATIC_VARIANTS:
+        vcf_chunks = util.split_vcf(
+            pcgr_prep_fp,
+            output_dir
+        )
+        pcgr_tsv_fp, pcgr_vcf_fp = run_somatic_chunck(
+        vcf_chunks,
         kwargs['pcgr_data_dir'],
         kwargs['vep_dir'],
         output_dir,
