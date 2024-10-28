@@ -147,7 +147,7 @@ def split_vcf(input_vcf, output_dir):
     for record in vcf_in:
         current_position = record.POS
         # Check if we need to start a new chunk
-        if variant_count >= 15000 and (last_position is None or current_position != last_position):
+        if variant_count >= constants.MAX_SOMATIC_VARIANTS and (last_position is None or current_position != last_position):
             # Close the current chunk file and start a new one
             vcf_out.close()
             chunk_number += 1
