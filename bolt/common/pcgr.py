@@ -112,7 +112,7 @@ def get_minimal_header(input_fh):
     return '\n'.join([filetype_line, *chrom_lines, *format_lines, column_line])
 
 
-def run_somatic(input_fp, pcgr_refdata_dir, pcgr_pcgr_output_dir, chunk_nbr=None, chunk_nbr=None, threads=1, pcgr_conda=None, pcgrr_conda=None, purity=None, ploidy=None, sample_id=None):
+def run_somatic(input_fp, pcgr_refdata_dir, pcgr_output_dir, chunk_nbr=None, threads=1, pcgr_conda=None, pcgrr_conda=None, purity=None, ploidy=None, sample_id=None):
 
     # NOTE(SW): Nextflow FusionFS v2.2.8 does not support PCGR output to S3; instead write to a
     # temporary directory outside of the FusionFS mounted directory then manually copy across
@@ -246,7 +246,7 @@ def run_germline(input_fp, panel_fp, pcgr_refdata_dir, output_dir, threads=1, pc
 
     command = fr'''
         cpsr \
-          {command_args_str}
+            {command_args_str}
     '''
     if pcgr_conda:
         command_conda = f'conda run -n {pcgr_conda} \\'

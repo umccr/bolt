@@ -5,7 +5,7 @@ import textwrap
 import cyvcf2
 import logging
 import concurrent.futures
-from common import pcgr
+from .common import pcgr
 
 from .common import constants
 
@@ -118,7 +118,7 @@ def split_vcf(input_vcf, output_dir):
     """
     output_dir = pathlib.Path(output_dir / "vcf_chunks")
     output_dir.mkdir(parents=True, exist_ok=True)
-    """
+
 
     chunk_files = []
     chunk_number = 1
