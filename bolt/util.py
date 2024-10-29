@@ -5,6 +5,7 @@ import textwrap
 import cyvcf2
 import logging
 import concurrent.futures
+from common import pcgr
 
 from .common import constants
 
@@ -66,19 +67,6 @@ def execute_command(command, log_file_path=None):
 
 def command_prepare(command):
     return f'set -o pipefail; {textwrap.dedent(command)}'
-
-
-#def count_vcf_records(fp, exclude_args=None):
-#    args = list()
-#    if exclude_args:
-#        args.append(f'-e \'{exclude_args}\'')
-#
-#    args_str = ' '.join(args)
-#    command = f'bcftools view -H {args_str} {fp} | wc -l'
-#
-#    result = execute_command(command)
-#    return int(result.stdout)
-
 
 def count_vcf_records(fp):
     result = execute_command(f'bcftools view -H {fp} | wc -l')
@@ -202,9 +190,9 @@ def merge_vcf_files(vcf_files, merged_vcf_fp):
 
     # Prepare the bcftools merge command arguments
     command_args = [
-        f'bcftools merge',
-        f'-m all',
-        f'-Oz',
+        'bcftools merge',
+        '-m all',
+        '-Oz',
         f'-o {merged_unsorted_vcf}',
     ] + [str(vcf_file) for vcf_file in vcf_files]
 
@@ -224,8 +212,8 @@ def merge_vcf_files(vcf_files, merged_vcf_fp):
 
     # Sort the merged VCF file
     sort_command_args = [
-        f'bcftools sort',
-        f'-Oz',
+        'bcftools sort',
+        '-Oz',
         f'-o {merged_vcf}',
         f'{merged_unsorted_vcf}'
     ]
@@ -240,8 +228,8 @@ def merge_vcf_files(vcf_files, merged_vcf_fp):
 
     # Index the sorted merged VCF file
     index_command_args = [
-        f'bcftools index',
-        f'-t',
+        'bcftools index',
+        '-t',
         f'{merged_vcf}'
     ]
     index_command_args_str = delimiter.join(index_command_args)
