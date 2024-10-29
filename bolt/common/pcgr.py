@@ -110,7 +110,7 @@ def get_minimal_header(input_fh):
     return '\n'.join([filetype_line, *chrom_lines, *format_lines, column_line])
 
 
-def run_somatic(input_fp, pcgr_dir, output_dir, threads=1, pcgr_conda=None, pcgrr_conda=None, purity=None, ploidy=None, sample_id=None):
+def run_somatic(input_fp, pcgr_refdata_dir, output_dir, threads=1, pcgr_conda=None, pcgrr_conda=None, purity=None, ploidy=None, sample_id=None):
 
     # NOTE(SW): Nextflow FusionFS v2.2.8 does not support PCGR output to S3; instead write to a
     # temporary directory outside of the FusionFS mounted directory then manually copy across
@@ -128,6 +128,7 @@ def run_somatic(input_fp, pcgr_dir, output_dir, threads=1, pcgr_conda=None, pcgr
         f'--tumor_af_tag TUMOR_AF',
         f'--control_dp_tag NORMAL_DP',
         f'--control_af_tag NORMAL_AF',
+        f'--pcgr_dir {pcgr_refdata_dir}',
         f'--genome_assembly grch38',
         f'--assay WGS',
         f'--estimate_signatures',
@@ -152,7 +153,7 @@ def run_somatic(input_fp, pcgr_dir, output_dir, threads=1, pcgr_conda=None, pcgr
     # Pick order: https://github.com/Ensembl/ensembl-vep/blob/105.0/modules/Bio/EnsEMBL/VEP/OutputFactory.pm#L760
 
     if pcgrr_conda:
-        command_args.append(f'--pcgr_dir {pcgr_dir}')
+        command_args.append(f'--pcgrr_conda {pcgrr_conda}')
 
     if purity:
         command_args.append(f'--tumor_purity {purity}')
@@ -185,7 +186,7 @@ def run_somatic(input_fp, pcgr_dir, output_dir, threads=1, pcgr_conda=None, pcgr
     return pcgr_output_dir
 
 
-def run_germline(input_fp, panel_fp, pcgr_dir, output_dir, threads=1, pcgr_conda=None, pcgrr_conda=None, sample_id=None):
+def run_germline(input_fp, panel_fp, pcgr_refdata_dir, output_dir, threads=1, pcgr_conda=None, pcgrr_conda=None, sample_id=None):
 
     if not sample_id:
         sample_id = 'nosampleset'
@@ -206,13 +207,13 @@ def run_germline(input_fp, panel_fp, pcgr_dir, output_dir, threads=1, pcgr_conda
         f'--custom_list_name umccr_germline_panel',
         f'--pop_gnomad global',
         f'--classify_all',
-        f'--pcgr_dir {pcgr_dir}',
+        f'--pcgr_dir {pcgr_refdata_dir}',
         f'--vcfanno_n_proc {threads}',
         f'--vep_pick_order biotype,rank,appris,tsl,ccds,canonical,length,mane',
     ]
 
     if pcgrr_conda:
-        command_args.append(f'--pcgr_dir {pcgr_dir}')
+        command_args.append(f'--pcgrr_conda {pcgrr_conda}')
 
     # NOTE(SW): placed here to always have output directory last
     command_args.append(f'--output_dir {temp_dir.name}')
