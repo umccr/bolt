@@ -4,8 +4,11 @@ import re
 import shutil
 import tempfile
 import logging
+import concurrent.futures
+
 
 import cyvcf2
+
 
 from .. import util
 from ..common import constants
@@ -494,3 +497,87 @@ def annotate_record(record, annotations, *, allow_missing=False):
         record.INFO[info_enum.value] = v
 
     return record
+
+def split_vcf(input_vcf, output_dir):
+    """
+    Splits a VCF file into multiple chunks, each containing up to max_variants variants.
+    Each chunk includes the VCF header.
+    Ensures no overlapping positions between chunks.
+    """
+    output_dir = pathlib.Path(output_dir / "vcf_chunks")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    chunk_files = []
+    chunk_number = 1
+    variant_count = 0
+    base_filename = pathlib.Path(input_vcf).stem
+    chunk_filename = output_dir / f"{base_filename}_chunk{chunk_number}.vcf"
+    base_filename = input_vcf.stem
+    chunk_filename = output_dir / f"{base_filename}_chunk{chunk_number}.vcf"
+    chunk_files.append(chunk_filename)
+    # Open the input VCF using cyvcf2
+    vcf_in = cyvcf2.VCF(input_vcf)
+    # Create a new VCF file for the first chunk
+    vcf_out = cyvcf2.Writer(str(chunk_filename), vcf_in)
+    last_position = None
+    for record in vcf_in:
+        current_position = record.POS
+        # Check if we need to start a new chunk
+        if variant_count >= constants.MAX_SOMATIC_VARIANTS and (last_position is None or current_position != last_position):
+            # Close the current chunk file and start a new one
+            vcf_out.close()
+            chunk_number += 1
+            chunk_filename = output_dir / f"{base_filename}_chunk{chunk_number}.vcf"
+            chunk_files.append(chunk_filename)
+            vcf_out = cyvcf2.Writer(str(chunk_filename), vcf_in)
+            variant_count = 0
+        # Write the record to the current chunk
+        vcf_out.write_record(record)
+        variant_count += 1
+        last_position = current_position
+    # Close the last chunk file
+    vcf_out.close()
+    vcf_in.close()
+    logger.info(f"VCF file split into {len(chunk_files)} chunks.")
+    return chunk_files
+
+def run_somatic_chunck(vcf_chunks, pcgr_data_dir, output_dir, pcgr_output_dir, max_threads, pcgr_conda, pcgrr_conda):
+    pcgr_tsv_files = []
+    pcgr_vcf_files = []
+    num_chunks = len(vcf_chunks)
+    # Ensure we don't use more workers than available threads, and each worker has at least 2 threads
+    max_workers = min(num_chunks, max_threads // 2)
+    threads_quot, threads_rem = divmod(max_threads, num_chunks)
+    threads_per_chunk = max(2, threads_quot)
+    # Limit the number of workers to the smaller of num_chunks or max_threads // 2
+    with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
+        futures = {}
+        for chunk_number, vcf_file in enumerate(vcf_chunks, start=1):
+            # Assign extra thread to the first 'threads_rem' chunks
+            additional_thread = 1 if chunk_number <= threads_rem else 0
+            total_threads = threads_per_chunk + additional_thread
+            futures[executor.submit(run_somatic, vcf_file, pcgr_data_dir, pcgr_output_dir, chunk_number, total_threads, pcgr_conda, pcgrr_conda)] = chunk_number
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                pcgr_tsv_fp, pcgr_vcf_fp = future.result()
+                if pcgr_tsv_fp:
+                    pcgr_tsv_files.append(pcgr_tsv_fp)
+                if pcgr_vcf_fp:
+                    pcgr_vcf_files.append(pcgr_vcf_fp)
+            except Exception as e:
+                print(f"Exception occurred: {e}")
+    merged_vcf_fp, merged_tsv_fp = merging_pcgr_files(output_dir, pcgr_vcf_files, pcgr_tsv_files)
+    return merged_tsv_fp, merged_vcf_fp
+
+def merging_pcgr_files(output_dir, pcgr_vcf_files, pcgr_tsv_fp):
+    pcgr_dir = pathlib.Path(output_dir) / 'pcgr'
+    pcgr_dir.mkdir(exist_ok=True)
+
+    # Merge all TSV files into a single file in the pcgr directory
+    merged_tsv_fp = pcgr_dir / "nosampleset.pcgr_acmg.grch38.snvs_indels.tiers.tsv"
+    util.merge_tsv_files(pcgr_tsv_fp, merged_tsv_fp)
+
+    # Step 5: Merge all VCF files into a single file in the pcgr directory
+    merged_vcf_path = pcgr_dir / "nosampleset.pcgr_acmg.grch38"
+    merged_vcf = util.merge_vcf_files(pcgr_vcf_files, merged_vcf_path)
+
+    return merged_vcf, merged_tsv_fp
