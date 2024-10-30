@@ -107,12 +107,12 @@ def entry(ctx, **kwargs):
     print(f"Total number of variants in the input VCF: {total_variants}")
 
     # Run PCGR in chunks if the total number of variants exceeds the maximum allowed for somatic variants
-    if total_variants > 15000:
+    if total_variants > constants.MAX_SOMATIC_VARIANTS:
         vcf_chunks = pcgr.split_vcf(
             pcgr_prep_fp,
             output_dir
         )
-        pcgr_tsv_fp, pcgr_vcf_fp = util.run_somatic_chunck(
+        pcgr_tsv_fp, pcgr_vcf_fp = pcgr.run_somatic_chunck(
         vcf_chunks,
         kwargs['pcgr_data_dir'],
         output_dir,
