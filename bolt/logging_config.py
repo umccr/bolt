@@ -3,7 +3,7 @@ import sys
 import pathlib
 
 
-def setup_logging(output_dir, log_filename ):
+def setup_logging(output_dir, log_filename):
     log_file = pathlib.Path(output_dir) / log_filename
     logging.basicConfig(
         level=logging.DEBUG,
