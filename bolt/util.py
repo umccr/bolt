@@ -1,16 +1,19 @@
-import os
 import pathlib
 import subprocess
 import textwrap
-import cyvcf2
 import logging
 import concurrent.futures
-from .common import pcgr
 
+
+import cyvcf2
+
+
+from .common import pcgr
 from .common import constants
 
-# Set up logging
+
 logger = logging.getLogger(__name__)
+
 
 # TODO(SW): create note that number this assumes location of `<root>/<package>/<file>`
 def get_project_root():
@@ -33,37 +36,34 @@ def execute_command(command, log_file_path=None):
     """
     logger.info(command.strip())
 
-    try:
-        if log_file_path:
-            with open(log_file_path, 'w') as log_file:
-                process = subprocess.run(
-                    command,
-                    shell=True,
-                    executable='/bin/bash',
-                    check=True,
-                    stdout=log_file,
-                    stderr=subprocess.STDOUT,
-                    text=True,
-                    encoding='utf-8'
-                )
-        else:
+    if log_file_path:
+        with log_file_path.open('a') as log_file:
             process = subprocess.run(
                 command,
                 shell=True,
                 executable='/bin/bash',
                 check=True,
-                capture_output=True,
+                stdout=log_file,
+                stderr=subprocess.STDOUT,
                 text=True,
                 encoding='utf-8'
             )
-            if process.stdout:
-                logger.info(process.stdout)
-            if process.stderr:
-                logger.error(process.stderr)
-            return(process)
-    except subprocess.CalledProcessError as e:
-        logger.error(f"Command failed with error: {e}")
-        raise SystemExit(e)
+    else:
+        process = subprocess.run(
+            command,
+            shell=True,
+            executable='/bin/bash',
+            check=True,
+            capture_output=True,
+            text=True,
+            encoding='utf-8'
+        )
+        if process.stdout:
+            logger.info(process.stdout)
+        if process.stderr:
+            logger.error(process.stderr)
+
+    return(process)
 
 def command_prepare(command):
     return f'set -o pipefail; {textwrap.dedent(command)}'
@@ -251,15 +251,17 @@ def merge_vcf_files(vcf_files, merged_vcf_fp):
     return merged_vcf
 
 def merging_pcgr_files(output_dir, pcgr_vcf_files, pcgr_tsv_fp):
-    # Step 3: Merge all chunk VCF files into a single file
-    pcgr_dir = output_dir / 'pcgr/'
+    pcgr_dir = pathlib.Path(output_dir) / 'pcgr'
     pcgr_dir.mkdir(exist_ok=True)
-    # Merge all TSV files into a single file in the pcgr directory    merged_tsv_fp = os.path.join(pcgr_dir, "nosampleset.pcgr_acmg.grch38.snvs_indels.tiers.tsv")
-    merged_tsv_fp = os.path.join(pcgr_dir, "nosampleset.pcgr_acmg.grch38.snvs_indels.tiers.tsv")
+
+    # Merge all TSV files into a single file in the pcgr directory
+    merged_tsv_fp = pcgr_dir / "nosampleset.pcgr_acmg.grch38.snvs_indels.tiers.tsv"
     merge_tsv_files(pcgr_tsv_fp, merged_tsv_fp)
+
     # Step 5: Merge all VCF files into a single file in the pcgr directory
-    merged_vcf_path = os.path.join(pcgr_dir, "nosampleset.pcgr_acmg.grch38")
+    merged_vcf_path = pcgr_dir / "nosampleset.pcgr_acmg.grch38"
     merged_vcf = merge_vcf_files(pcgr_vcf_files, merged_vcf_path)
+
     return merged_vcf, merged_tsv_fp
 
 def run_somatic_chunck(vcf_chunks, pcgr_data_dir, output_dir, pcgr_output_dir, max_threads, pcgr_conda, pcgrr_conda):

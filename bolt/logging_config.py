@@ -1,9 +1,10 @@
 import logging
 import sys
-from pathlib import Path
+import pathlib
 
-def setup_logging(output_dir):
-    log_file = Path(output_dir) / 'smvl_somatic.log'
+
+def setup_logging(output_dir, log_filename ):
+    log_file = pathlib.Path(output_dir) / log_filename
     logging.basicConfig(
         level=logging.DEBUG,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',

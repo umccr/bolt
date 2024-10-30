@@ -1,13 +1,19 @@
 import logging
 import pathlib
+
+
 import click
 import cyvcf2
+
 
 from ... import util
 from ...common import constants
 from ...common import pcgr
 from ...logging_config import setup_logging
+
+
 logger = logging.getLogger(__name__)
+
 
 @click.command(name='annotate')
 @click.pass_context
@@ -43,7 +49,7 @@ def entry(ctx, **kwargs):
     output_dir = pathlib.Path(kwargs['output_dir'])
     output_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
 
-    setup_logging(output_dir)
+    setup_logging(output_dir, "smlv_somatic_annotate.py")
 
     # Create a logger instance
     logger = logging.getLogger(__name__)

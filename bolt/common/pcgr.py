@@ -7,12 +7,12 @@ import logging
 
 import cyvcf2
 
-
 from .. import util
 from ..common import constants
 
-# Use the existing logger configuration
+
 logger = logging.getLogger(__name__)
+
 
 def prepare_vcf_somatic(input_fp, tumor_name, normal_name, output_dir):
 
@@ -112,17 +112,17 @@ def get_minimal_header(input_fh):
     return '\n'.join([filetype_line, *chrom_lines, *format_lines, column_line])
 
 
-def run_somatic(input_fp, pcgr_refdata_dir, pcgr_output_dir, chunk_nbr=None, threads=1, pcgr_conda=None, pcgrr_conda=None, purity=None, ploidy=None, sample_id=None):
+def run_somatic(input_fp, pcgr_refdata_dir, output_dir, chunk_nbr=None, threads=1, pcgr_conda=None, pcgrr_conda=None, purity=None, ploidy=None, sample_id=None):
 
     # NOTE(SW): Nextflow FusionFS v2.2.8 does not support PCGR output to S3; instead write to a
     # temporary directory outside of the FusionFS mounted directory then manually copy across
 
     temp_dir = tempfile.TemporaryDirectory()
-    temp_dir_path = pathlib.Path(temp_dir.name)
-    pcgr_output_dir = pcgr_output_dir / f"pcgr_{chunk_nbr}" if chunk_nbr is not None else pcgr_output_dir # Check if the output directory already exists
-    if pcgr_output_dir.exists():
-        logger.warning(f"Warning: Output directory '{pcgr_output_dir}' already exists and will be overwrited")
-        shutil.rmtree(pcgr_output_dir)
+    output_dir = output_dir / f"pcgr_{chunk_nbr}" if chunk_nbr is not None else output_dir
+
+    if output_dir.exists():
+        logger.warning(f"Output directory '{output_dir}' already exists and will be overwritten")
+        shutil.rmtree(output_dir)
 
 
     if not sample_id:
@@ -178,7 +178,7 @@ def run_somatic(input_fp, pcgr_refdata_dir, pcgr_output_dir, chunk_nbr=None, thr
 
     command = fr'''
         pcgr \
-            {command_args_str}
+        {command_args_str}
     '''
 
     if pcgr_conda:
@@ -187,15 +187,15 @@ def run_somatic(input_fp, pcgr_refdata_dir, pcgr_output_dir, chunk_nbr=None, thr
         command = command_formatting + command_conda + command
 
     # Log file path
-    log_file_path = temp_dir_path / "run_somatic.log"
+    log_file_path = pathlib.Path(temp_dir.name) / "run_somatic.log"
 
     # Run the command and redirect output to the log file
     util.execute_command(command, log_file_path=log_file_path)
 
-    shutil.copytree(temp_dir.name, pcgr_output_dir)
+    shutil.copytree(temp_dir.name, output_dir)
 
-    pcgr_tsv_fp = pathlib.Path(pcgr_output_dir) / 'nosampleset.pcgr_acmg.grch38.snvs_indels.tiers.tsv'
-    pcgr_vcf_fp = pathlib.Path(pcgr_output_dir) / 'nosampleset.pcgr_acmg.grch38.vcf.gz'
+    pcgr_tsv_fp = pathlib.Path(output_dir) / 'nosampleset.pcgr_acmg.grch38.snvs_indels.tiers.tsv'
+    pcgr_vcf_fp = pathlib.Path(output_dir) / 'nosampleset.pcgr_acmg.grch38.vcf.gz'
 
     # Check if both files exist
     if not pcgr_tsv_fp.exists(): 
@@ -246,7 +246,7 @@ def run_germline(input_fp, panel_fp, pcgr_refdata_dir, output_dir, threads=1, pc
 
     command = fr'''
         cpsr \
-            {command_args_str}
+        {command_args_str}
     '''
     if pcgr_conda:
         command_conda = f'conda run -n {pcgr_conda} \\'
