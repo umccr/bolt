@@ -110,56 +110,6 @@ def get_qualified_vcf_annotation(anno_enum):
     assert anno_enum in constants.VcfInfo or anno_enum in constants.VcfFormat
     return f'{anno_enum.namespace}/{anno_enum.value}'
 
-def split_vcf(input_vcf, output_dir):
-    """
-    Splits a VCF file into multiple chunks, each containing up to max_variants variants.
-    Each chunk includes the VCF header.
-    Ensures no overlapping positions between chunks.
-    """
-    output_dir = pathlib.Path(output_dir / "vcf_chunks")
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-
-    chunk_files = []
-    chunk_number = 1
-    variant_count = 0
-    base_filename = pathlib.Path(input_vcf).stem
-    chunk_filename = output_dir / f"{base_filename}_chunk{chunk_number}.vcf"
-    base_filename = input_vcf.stem
-    chunk_filename = output_dir / f"{base_filename}_chunk{chunk_number}.vcf"
-    chunk_files.append(chunk_filename)
-
-    # Open the input VCF using cyvcf2
-    vcf_in = cyvcf2.VCF(input_vcf)
-    # Create a new VCF file for the first chunk
-    vcf_out = cyvcf2.Writer(str(chunk_filename), vcf_in)
-
-    last_position = None
-
-    for record in vcf_in:
-        current_position = record.POS
-        # Check if we need to start a new chunk
-        if variant_count >= constants.MAX_SOMATIC_VARIANTS and (last_position is None or current_position != last_position):
-            # Close the current chunk file and start a new one
-            vcf_out.close()
-            chunk_number += 1
-            chunk_filename = output_dir / f"{base_filename}_chunk{chunk_number}.vcf"
-            chunk_files.append(chunk_filename)
-            vcf_out = cyvcf2.Writer(str(chunk_filename), vcf_in)
-            variant_count = 0
-
-        # Write the record to the current chunk
-        vcf_out.write_record(record)
-        variant_count += 1
-        last_position = current_position
-
-    # Close the last chunk file
-    vcf_out.close()
-    vcf_in.close()
-
-    logger.info(f"VCF file split into {len(chunk_files)} chunks.")
-
-    return chunk_files
 
 def merge_tsv_files(tsv_files, merged_tsv_fp):
     """
