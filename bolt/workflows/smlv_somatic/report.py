@@ -52,8 +52,9 @@ def entry(ctx, **kwargs):
     output_dir = pathlib.Path(kwargs['output_dir'])
     output_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
 
-    script_name = pathlib.Path(__file__).stem
-    setup_logging(output_dir, script_name)
+    setup_logging(output_dir, "smlv_somatic_annotate.py")
+    logger = logging.getLogger(__name__)
+
 
     # BCFtools stats
     bcftools_vcf_fp = bcftools_stats_prepare(kwargs['vcf_fp'], kwargs['tumor_name'], output_dir)
@@ -138,7 +139,6 @@ def entry(ctx, **kwargs):
     pcgr.run_somatic(
         pcgr_prep_fp,
         kwargs['pcgr_data_dir'],
-        kwargs['vep_dir'],
         pcgr_output_dir,
         threads=kwargs['threads'],
         pcgr_conda=kwargs['pcgr_conda'],

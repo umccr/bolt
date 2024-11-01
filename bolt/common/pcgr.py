@@ -149,7 +149,7 @@ def run_somatic(input_fp, pcgr_refdata_dir, pcgr_output_dir, chunk_nbr=None, thr
         #f'--show_noncoding',
         f'--vcfanno_n_proc {threads}',
         f'--vep_n_forks {threads}',
-        f'--vep_pick_order biotype,rank,appris,tsl,ccds,canonical,length,mane_plus_clinical,mane_select',
+        f'--vep_pick_order biotype,rank,appris,tsl,ccds,canonical,length,mane',
     ]
 
     # NOTE(SW): VEP pick order is applied as a successive filter:
@@ -201,8 +201,8 @@ def run_somatic(input_fp, pcgr_refdata_dir, pcgr_output_dir, chunk_nbr=None, thr
     # Run the command and redirect output to the log file
     util.execute_command(command, log_file_path=log_file_path)
 
-    pcgr_tsv_fp = pathlib.Path(pcgr_output_dir) / 'nosampleset.pcgr_acmg.grch38.snvs_indels.tiers.tsv'
-    pcgr_vcf_fp = pathlib.Path(pcgr_output_dir) / 'nosampleset.pcgr_acmg.grch38.vcf.gz'
+    pcgr_tsv_fp = pathlib.Path(output_dir) / f'{sample_id}.pcgr_acmg.grch38.snvs_indels.tiers.tsv'
+    pcgr_vcf_fp = pathlib.Path(output_dir) / f'{sample_id}.pcgr_acmg.grch38.vcf.gz'
 
     # Check if both files exist
     if not pcgr_tsv_fp.exists(): 
