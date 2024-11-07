@@ -21,49 +21,90 @@ def get_project_root():
     project_root = dirpath.parent
     return project_root
 
-
 def execute_command(command, log_file_path=None):
     """
-    Executes a shell command.
+    Executes a shell command, streaming output to console, logging, and capturing errors.
 
     Parameters:
     - command: Command to be executed as a formatted string.
     - log_file_path: Optional path to a log file to capture the command output.
 
-    Note:
-    - If no log_file_path is specified, the outputs will be printed in the terminal and predefined logfile .
-    - If log_file_path is specified, the log will only be written to the specified file.
+    Returns:
+    - (stdout, stderr): A tuple containing the complete stdout and stderr of the command.
+
+    Raises:
+    - subprocess.CalledProcessError if the command exits with a non-zero status.
     """
     logger.info(command.strip())
 
+    # Open the log file if a path is specified
+    log_file = None
     if log_file_path:
-        with log_file_path.open('a') as log_file:
-            process = subprocess.run(
-                command,
-                shell=True,
-                executable='/bin/bash',
-                check=True,
-                stdout=log_file,
-                stderr=subprocess.STDOUT,
-                text=True,
-                encoding='utf-8'
-            )
-    else:
-        process = subprocess.run(
-            command,
-            shell=True,
-            executable='/bin/bash',
-            check=True,
-            capture_output=True,
-            text=True,
-            encoding='utf-8'
-        )
-        if process.stdout:
-            logger.info(process.stdout)
-        if process.stderr:
-            logger.error(process.stderr)
+        log_file = log_file_path.open('a', encoding='utf-8')
 
-    return(process)
+    # Start the process
+    with subprocess.Popen(command, shell=True, executable='/bin/bash',
+                          stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                          text=True, encoding='utf-8') as process:
+
+        # To collect the complete stdout and stderr
+        full_stdout = []
+        full_stderr = []
+
+        # Stream stdout and stderr in real-time
+        while True:
+            stdout_line = process.stdout.readline()
+            stderr_line = process.stderr.readline()
+
+            # Handle stdout
+            if stdout_line:
+                full_stdout.append(stdout_line)
+                if log_file:
+                    log_file.write(stdout_line)
+                    log_file.flush()  # Ensure immediate write
+                logger.info(stdout_line.strip())
+
+            # Handle stderr
+            if stderr_line:
+                full_stderr.append(stderr_line)
+                if log_file:
+                    log_file.write(stderr_line)
+                    log_file.flush()
+                logger.error(stderr_line.strip())
+
+            # If the process has finished and there are no more lines, break
+            if process.poll() is not None and not stdout_line and not stderr_line:
+                break
+
+        # Communicate to ensure we capture everything left in the buffers
+        remaining_stdout, remaining_stderr = process.communicate()
+
+        # Handle remaining stdout
+        if remaining_stdout:
+            full_stdout.append(remaining_stdout)
+            if log_file:
+                log_file.write(remaining_stdout)
+                log_file.flush()
+            logger.info(remaining_stdout.strip())
+
+        # Handle remaining stderr
+        if remaining_stderr:
+            full_stderr.append(remaining_stderr)
+            if log_file:
+                log_file.write(remaining_stderr)
+                log_file.flush()
+            logger.error(remaining_stderr.strip())
+
+    # Close the log file if it was opened
+    if log_file:
+        log_file.close()
+
+    # Combine all the lines into final stdout and stderr strings
+    stdout_str = ''.join(full_stdout)
+    stderr_str = ''.join(full_stderr)
+    
+    return process
+
 
 def command_prepare(command):
     return f'set -o pipefail; {textwrap.dedent(command)}'
