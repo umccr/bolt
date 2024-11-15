@@ -345,7 +345,7 @@ VCF_HEADER_ENTRIES = {
     },
 
     VcfInfo.RESCUED_FILTERS_PENDING: {
-        'Number': '1',
+        'Number': '.',
         'Type': 'String',
         'Description': 'Filters pending prior to variant rescue',
     },
@@ -368,13 +368,11 @@ VCF_HEADER_ENTRIES = {
         'Description': 'Approximate read depth (reads with MQ=255 or with bad mates are filtered)',
     },
     VcfFormat.SAGE_SB: {
-        'Number': '1',
+        'Number': '2',
         'Type': 'Float',
-        'Description': 'Strand bias - percentage of first-in-pair reads',
+        'Description': 'Strand bias - percentage of first-in-pair reads (forward, reverse)',
     },
 }
-
-
 #####################
 ##      Other      ##
 #####################
