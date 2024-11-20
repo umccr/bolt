@@ -2,6 +2,7 @@ import pathlib
 import subprocess
 import sys
 import textwrap
+import cyvcf2
 
 
 from .common import constants
@@ -99,3 +100,25 @@ def get_qualified_vcf_annotation(anno_enum):
 #    existing_filters = [e for e in record.FILTERS if e != 'PASS']
 #    assert filter_enum.value not in existing_filters
 #    return ';'.join([*existing_filters, filter_enum.value])
+
+def check_annotation_headers(info_field_map, vcf_fp):
+    # Ensure header descriptions from source INFO annotations match those defined here for the
+    # output file; force manual inspection where they do not match
+    vcf_fh = cyvcf2.VCF(vcf_fp)
+    for header_dst, header_src in info_field_map.items():
+        # Skip header lines that do not have an equivalent entry in the VCF
+        try:
+            header_src_entry = vcf_fh.get_header_type(header_src)
+        except KeyError:
+            continue
+
+        header_dst_entry = get_vcf_header_entry(header_dst)
+        # Remove leading and trailing quotes from source
+        header_src_description_unquoted = header_src_entry['Description'].strip('"')
+        try:
+            assert  header_src_description_unquoted == header_dst_entry['Description']
+        except AssertionError:
+            print(f'Header description mismatch for {header_dst.value}')
+            print(f'  src: {header_src_description_unquoted}')
+            print(f'  dst: {header_dst_entry["Description"]}')
+            sys.exit(1)

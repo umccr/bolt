@@ -253,7 +253,7 @@ def transfer_annotations_somatic(input_fp, tumor_name, filter_name, pcgr_dir, ou
     pcgr_vcf_fp = pathlib.Path(pcgr_dir) / 'nosampleset.pcgr_acmg.grch38.vcf.gz'
 
     # Enforce matching defined and source INFO annotations
-    check_annotation_headers(info_field_map, pcgr_vcf_fp)
+    util.check_annotation_headers(info_field_map, pcgr_vcf_fp)
 
     # Gather PCGR annotation data for records
     pcgr_data = collect_pcgr_annotation_data(pcgr_tsv_fp, pcgr_vcf_fp, info_field_map)
@@ -299,7 +299,7 @@ def transfer_annotations_germline(input_fp, normal_name, cpsr_dir, output_dir):
     cpsr_vcf_fp = pathlib.Path(cpsr_dir) / f'{normal_name}.cpsr.grch38.vcf.gz'
 
     # Enforce matching defined and source INFO annotations
-    check_annotation_headers(info_field_map, cpsr_vcf_fp)
+    util.check_annotation_headers(info_field_map, cpsr_vcf_fp)
 
     # Gather CPSR annotation data for records
     cpsr_data = collect_cpsr_annotation_data(cpsr_tsv_fp, cpsr_vcf_fp, info_field_map)
@@ -324,24 +324,6 @@ def transfer_annotations_germline(input_fp, normal_name, cpsr_dir, output_dir):
         # NOTE(SW): allow missing CPSR annotations for input variants, CPSR seems to drop some
         record_ann = annotate_record(record, cpsr_data, allow_missing=True)
         output_fh.write_record(record_ann)
-
-
-def check_annotation_headers(info_field_map, vcf_fp):
-    # Ensure header descriptions from source INFO annotations match those defined here for the
-    # output file; force manual inspection where they do not match
-    vcf_fh = cyvcf2.VCF(vcf_fp)
-    for header_dst, header_src in info_field_map.items():
-
-        # Skip header lines that do not have an equivalent entry in the PCGR/CPSR VCF
-        try:
-            header_src_entry = vcf_fh.get_header_type(header_src)
-        except KeyError:
-            continue
-
-        header_dst_entry = util.get_vcf_header_entry(header_dst)
-        # Remove leading and trailing quotes from source
-        header_src_description_unquoted = header_src_entry['Description'].strip('"')
-        assert  header_src_description_unquoted == header_dst_entry['Description']
 
 
 def collect_pcgr_annotation_data(tsv_fp, vcf_fp, info_field_map):

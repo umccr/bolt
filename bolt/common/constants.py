@@ -370,7 +370,7 @@ VCF_HEADER_ENTRIES = {
     VcfFormat.SAGE_SB: {
         'Number': '2',
         'Type': 'Float',
-        'Description': 'Strand bias - percentage of first-in-pair reads (forward, reverse)',
+        'Description': 'Fragment strand bias - percentage of forward-orientation fragments (ref,alt)',
     },
 }
 #####################
