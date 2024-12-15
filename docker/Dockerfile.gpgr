@@ -21,7 +21,8 @@ RUN \
     'r-sigrap ==0.1.1' \
     'bioconductor-bsgenome.hsapiens.ucsc.hg38 ==1.4.5' \
     'bioconductor-txdb.hsapiens.ucsc.hg38.knowngene ==3.16.0' \
-    'bioconductor-genomeinfodbdata ==1.2.9'
+    'bioconductor-genomeinfodbdata ==1.2.9'\
+    'bioconductor-bsgenome.hsapiens.ucsc.hg19 ==1.4.5'
 
 COPY ./ /tmp/bolt/
 RUN \
