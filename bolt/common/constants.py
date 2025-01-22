@@ -41,6 +41,43 @@ PCGR_ACTIONABILITY_TIER_RESCUE = {
 }
 
 
+################################
+## Hypermutated report filter ##
+################################
+PCGR_TIERS_FILTERING = (
+    'TIER_1',
+    'TIER_2',
+    'TIER_3',
+    'TIER_4',
+    'NONCODING',
+)
+
+VEP_IMPACTS_FILTER = (
+    'intergenic',
+    'intronic',
+    'downstream',
+    'upstream',
+    'impacts_other',
+)
+
+GENOMIC_REGIONS_FILTERING = (
+    'difficult',
+    'none',
+    'giab_conf',
+)
+
+HOTSPOT_FIELDS_FILTERING = (
+    'SAGE_HOTSPOT',
+    'hotspot',
+    'PCGR_MUTATION_HOTSPOT',
+)
+
+RETAIN_FIELDS_FILTERING = (
+    'PANEL',
+    *HOTSPOT_FIELDS_FILTERING,
+)
+
+
 ##################################################
 ## VCF FILTER tags and FORMAT, INFO annotations ##
 ##################################################
