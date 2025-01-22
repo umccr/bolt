@@ -1,4 +1,7 @@
+import collections
 import csv
+import functools
+import itertools
 import pathlib
 import re
 import shutil
@@ -582,3 +585,109 @@ def merging_pcgr_files(output_dir, pcgr_vcf_files, pcgr_tsv_fp):
     merged_vcf = util.merge_vcf_files(pcgr_vcf_files, merged_vcf_path)
 
     return merged_vcf, merged_tsv_fp
+
+
+def get_variant_filter_data(variant):
+    attribute_names = (
+        'tier',
+        'difficult',
+        'giab_conf',
+        'intergenic',
+        'intronic',
+        'downstream',
+        'upstream',
+        'impacts_other',
+    )
+
+    data = {e: None for e in attribute_names}
+
+
+    data['tier'] = variant.INFO['PCGR_TIER']
+
+
+    info_keys = [k for k, v in variant.INFO]
+
+    data['difficult'] = any(e.startswith('DIFFICULT') for e in info_keys)
+    data['giab_conf'] = 'GIAB_CONF' in info_keys
+
+
+    # NOTE(SW): GIAB_CONF always overrides DIFFICULT tags
+    if data['giab_conf'] and data['difficult']:
+        data['difficult']= False
+
+
+    for impact in get_impacts(variant.INFO['PCGR_CSQ']):
+        if impact == 'intergenic_variant':
+            data['intergenic'] = True
+        elif impact == 'intron_variant':
+            data['intronic'] = True
+        elif impact == 'downstream_gene_variant':
+            data['downstream'] = True
+        elif impact == 'upstream_gene_variant':
+            data['upstream'] = True
+        elif impact:
+            data['impacts_other'] = True
+        else:
+            assert False
+
+    return data
+
+
+def get_impacts(csq_str_full):
+    impacts = set()
+    for csq_str in csq_str_full.split(','):
+        csq_tokens = csq_str.split('|')
+        impact_str = csq_tokens[1]
+        impacts.update(impact_str.split('&'))
+    return impacts
+
+
+def determine_filter(data):
+
+    for impact, region in get_ordering(tiers=False):
+
+        # NOTE(SW): this is less efficient than nested loops since the outer block is reevaluated
+        # within what would be the inner loop each cycle; taking this route for cleaner code
+
+        impacts_higher = get_impacts_higher(impact)
+        impact_filter = bool(data[impact]) and not any(bool(data[e]) for e in impacts_higher)
+
+        region_filter = False
+        if region == 'none':
+            region_filter = not (data['difficult'] or data['giab_conf'])
+        else:
+            region_filter = data[region]
+
+        if impact_filter and region_filter:
+            return (impact, region)
+
+    return False
+
+
+def get_variant_repr(variant):
+    return (variant.CHROM, variant.POS, variant.REF, tuple(variant.ALT))
+
+
+@functools.cache
+def get_ordering(tiers=True, impacts=True, regions=True):
+    categories = [
+        constants.PCGR_TIERS_FILTERING if tiers else None,
+        constants.VEP_IMPACTS_FILTER if impacts else None,
+        constants.GENOMIC_REGIONS_FILTERING if regions else None,
+    ]
+
+    # NOTE(SW): I'm not aware of any noncoding impacts for TIER_[1-4] other than TERT but keeping
+    # in to be overly cautious
+    ordering_iter = itertools.product(*(c for c in categories if c))
+
+    return tuple(ordering_iter)
+
+
+@functools.cache
+def get_impacts_higher(impact):
+    impact_index = constants.VEP_IMPACTS_FILTER.index(impact)
+    if impact_index + 1 < len(constants.VEP_IMPACTS_FILTER):
+        impacts_higher = constants.VEP_IMPACTS_FILTER[impact_index+1:len(constants.VEP_IMPACTS_FILTER)]
+    else:
+        impacts_higher = list()
+    return impacts_higher
