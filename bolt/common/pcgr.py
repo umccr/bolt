@@ -1,4 +1,7 @@
+import collections
 import csv
+import functools
+import itertools
 import pathlib
 import re
 import shutil
