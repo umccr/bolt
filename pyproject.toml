@@ -9,6 +9,9 @@ include = ["bolt*"]
 [project]
 name = "bolt"
 version = "0.2.13"
+authors = [
+  {name = "Stephen Watts", email = "stephen.watts@umccr.org"},
+]
 dependencies = [
     "biopython",
     "cyvcf2",
