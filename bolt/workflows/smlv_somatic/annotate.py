@@ -49,7 +49,7 @@ def entry(ctx, **kwargs):
     output_dir = pathlib.Path(kwargs['output_dir'])
     output_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
 
-    setup_logging(output_dir, "smlv_somatic_annotate.py")
+    setup_logging(output_dir, "smlv_somatic.log")
 
     # Create a logger instance
     logger = logging.getLogger(__name__)
