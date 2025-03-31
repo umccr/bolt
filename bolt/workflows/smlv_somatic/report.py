@@ -51,9 +51,8 @@ def entry(ctx, **kwargs):
     output_dir = pathlib.Path(kwargs['output_dir'])
     output_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
 
-    setup_logging(output_dir, "smlv_somatic_annotate.py")
-    logger = logging.getLogger(__name__)
-
+    script_name = pathlib.Path(__file__).stem
+    setup_logging("logs", script_name)
 
     # BCFtools stats
     bcftools_vcf_fp = bcftools_stats_prepare(kwargs['vcf_fp'], kwargs['tumor_name'], output_dir)

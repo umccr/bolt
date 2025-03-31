@@ -7,6 +7,7 @@ import cyvcf2
 
 from ... import util
 from ...common import constants
+from ...logging_config import setup_logging
 
 
 @click.command(name='filter')
@@ -25,6 +26,9 @@ def entry(ctx, **kwargs):
     # Create output directory
     output_dir = pathlib.Path(kwargs['output_dir'])
     output_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
+
+    script_name = pathlib.Path(__file__).stem
+    setup_logging("logs", script_name)
 
     # Open input VCF and set required header entries for output
     in_fh = cyvcf2.VCF(kwargs['vcf_fp'])
