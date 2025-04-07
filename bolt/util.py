@@ -22,8 +22,12 @@ def get_project_root():
     return project_root
 
 def execute_command(command, log_file_path=None):
-    logger.info("Executing command: %s", command)
-    # Open the process with stderr merged to stdout
+    logger.info("Executing command: %s", command.strip())
+
+    # Open the log file if provided
+    log_file = log_file_path.open('a', encoding='utf-8') if log_file_path else None
+
+    # Launch process with combined stdout and stderr streams, and line buffering enabled.
     process = subprocess.Popen(
         command,
         shell=True,
@@ -31,17 +35,23 @@ def execute_command(command, log_file_path=None):
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
-        bufsize=1  # Line-buffered output
+        encoding='utf-8',
+        bufsize=1  # line buffered
     )
-    
-    # Capture output in real time
+
+    # Iterate over each line as it becomes available
     with process.stdout:
         for line in iter(process.stdout.readline, ''):
-            logger.info(line.strip())
-            if log_file_path:
-                with open(log_file_path, 'a', encoding='utf-8') as log_file:
+            if line:
+                logger.info(line.strip())
+                if log_file:
                     log_file.write(line)
-    process.wait()
+                    log_file.flush()  # flush immediately for real-time logging
+    process.wait()  # wait for the process to complete
+
+    if log_file:
+        log_file.close()
+
     return process
 
 def command_prepare(command):
