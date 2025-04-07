@@ -21,49 +21,27 @@ def get_project_root():
 
 
 def execute_command(command, log_file_path=None):
-    """
-    Executes a shell command.
-
-    Parameters:
-    - command: Command to be executed as a formatted string.
-    - log_file_path: Optional path to a log file to capture the command output.
-
-    Raises:
-    - SystemExit if the command fails.
-    """
-    logger.info(command.strip())
-
-    try:
-        if log_file_path:
-            with open(log_file_path, 'w') as log_file:
-                process = subprocess.run(
-                    command,
-                    shell=True,
-                    executable='/bin/bash',
-                    check=True,
-                    stdout=log_file,
-                    stderr=subprocess.STDOUT,
-                    text=True,
-                    encoding='utf-8'
-                )
-        else:
-            process = subprocess.run(
-                command,
-                shell=True,
-                executable='/bin/bash',
-                check=True,
-                capture_output=True,
-                text=True,
-                encoding='utf-8'
-            )
-            if process.stdout:
-                logger.info(process.stdout)
-            if process.stderr:
-                logger.error(process.stderr)
-            return(process)
-    except subprocess.CalledProcessError as e:
-        logger.error(f"Command failed with error: {e}")
-        raise SystemExit(e)
+    logger.info("Executing command: %s", command)
+    # Open the process with stderr merged to stdout
+    process = subprocess.Popen(
+        command,
+        shell=True,
+        executable='/bin/bash',
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1  # Line-buffered output
+    )
+    
+    # Capture output in real time
+    with process.stdout:
+        for line in iter(process.stdout.readline, ''):
+            logger.info(line.strip())
+            if log_file_path:
+                with open(log_file_path, 'a', encoding='utf-8') as log_file:
+                    log_file.write(line)
+    process.wait()
+    return process
 
 def command_prepare(command):
     return f'set -o pipefail; {textwrap.dedent(command)}'
