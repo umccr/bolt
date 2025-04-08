@@ -2,10 +2,8 @@ import os
 import pathlib
 import subprocess
 import textwrap
-import cyvcf2
 import logging
-import concurrent.futures
-from common import pcgr
+from types import SimpleNamespace
 
 from .common import constants
 
@@ -38,11 +36,13 @@ def execute_command(command, log_file_path=None):
         bufsize=1  # line buffered
     )
 
+    output_lines = []
     # Iterate over each line as it becomes available
     with process.stdout:
         for line in iter(process.stdout.readline, ''):
             if line:
                 logger.info(line.strip())
+                output_lines.append(line)
                 if log_file:
                     log_file.write(line)
                     log_file.flush()  # flush immediately for real-time logging
@@ -51,14 +51,25 @@ def execute_command(command, log_file_path=None):
     if log_file:
         log_file.close()
 
-    return process
+    result = SimpleNamespace(
+        stdout=''.join(output_lines),
+        returncode=process.returncode,
+        pid=process.pid,
+        command=command
+    )
+
+    return result
 
 def command_prepare(command):
     return f'set -o pipefail; {textwrap.dedent(command)}'
 
 def count_vcf_records(fp):
-    result = execute_command(f'bcftools view -H {fp} | wc -l')
-    return int(result.stdout)
+    result = subprocess.run(f'bcftools view -H {fp} | wc -l',
+                            shell=True,
+                            executable="/bin/bash",
+                            capture_output=True,
+                            text=True )
+    return int(result.stdout.strip())
 
 
 def add_vcf_header_entry(fh, anno_enum):
