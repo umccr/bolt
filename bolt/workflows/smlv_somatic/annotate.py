@@ -45,9 +45,6 @@ def entry(ctx, **kwargs):
 
     setup_logging(output_dir)
 
-    # Create a logger instance
-    logger = logging.getLogger(__name__)
-
     # Set all FILTER="." to FILTER="PASS" as required by PURPLE
     filter_pass_fp = set_filter_pass(kwargs['vcf_fp'], kwargs['tumor_name'], output_dir)
 

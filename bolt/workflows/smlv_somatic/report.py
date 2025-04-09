@@ -45,6 +45,9 @@ def entry(ctx, **kwargs):
     output_dir = pathlib.Path(kwargs['output_dir'])
     output_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
 
+    script_name = pathlib.Path(__file__).stem
+    setup_logging(output_dir, script_name)
+
     # BCFtools stats
     bcftools_vcf_fp = bcftools_stats_prepare(kwargs['vcf_fp'], kwargs['tumor_name'], output_dir)
     run_bcftools_stats(bcftools_vcf_fp, kwargs['tumor_name'], output_dir)
