@@ -7,10 +7,14 @@ import pathlib
 
 import click
 import cyvcf2
+import logging
 
 
 from ... import util
 from ...common import constants
+from ...logging_config import setup_logging
+
+logger = logging.getLogger(__name__)
 
 
 @click.command(name='rescue')
@@ -36,6 +40,9 @@ def entry(ctx, **kwargs):
     # Create output directory
     output_dir = pathlib.Path(kwargs['output_dir'])
     output_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
+
+    script_name = pathlib.Path(__file__).stem
+    setup_logging(output_dir, script_name)
 
     # Select PASS SAGE variants in hotspots and then split into existing and novel calls
     sage_pass_vcf_fp = select_sage_pass_hotspot(

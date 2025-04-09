@@ -43,7 +43,8 @@ def entry(ctx, **kwargs):
     output_dir = pathlib.Path(kwargs['output_dir'])
     output_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
 
-    setup_logging(output_dir)
+    script_name = pathlib.Path(__file__).stem
+    setup_logging(output_dir, script_name)
 
     # Set all FILTER="." to FILTER="PASS" as required by PURPLE
     filter_pass_fp = set_filter_pass(kwargs['vcf_fp'], kwargs['tumor_name'], output_dir)
