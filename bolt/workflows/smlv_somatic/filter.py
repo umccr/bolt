@@ -26,6 +26,9 @@ def entry(ctx, **kwargs):
     output_dir = pathlib.Path(kwargs['output_dir'])
     output_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
 
+    script_name = pathlib.Path(__file__).stem
+    setup_logging(output_dir, script_name)
+
     # Open input VCF and set required header entries for output
     in_fh = cyvcf2.VCF(kwargs['vcf_fp'])
     header_filters = (
