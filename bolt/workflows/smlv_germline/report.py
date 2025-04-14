@@ -1,5 +1,6 @@
 import pathlib
 import yaml
+from ...logging_config import setup_logging
 
 
 import click
@@ -35,6 +36,9 @@ def entry(ctx, **kwargs):
     output_dir = pathlib.Path(kwargs['output_dir'])
     output_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
 
+    # Set up logging
+    script_name = pathlib.Path(__file__).stem
+    setup_logging(output_dir, script_name)
     # BCFtools stats
     run_bcftool_stats(kwargs['vcf_unfiltered_fp'], kwargs['normal_name'], output_dir)
 
