@@ -124,19 +124,20 @@ def run_somatic(input_fp, pcgr_refdata_dir, output_dir, threads=1, pcgr_conda=No
     command_args = [
         f'--sample_id {sample_id}',
         f'--input_vcf {input_fp}',
+        f'--vep_dir {pcgr_refdata_dir}',
+        f'--refdata_dir {pcgr_refdata_dir}',
         f'--tumor_dp_tag TUMOR_DP',
         f'--tumor_af_tag TUMOR_AF',
         f'--control_dp_tag NORMAL_DP',
         f'--control_af_tag NORMAL_AF',
-        f'--pcgr_dir {pcgr_refdata_dir}',
         f'--genome_assembly grch38',
         f'--assay WGS',
         f'--estimate_signatures',
-        f'--estimate_msi_status',
+        f'--estimate_msi',
         f'--estimate_tmb',
-        f'--show_noncoding',
+        #f'--show_noncoding',
         f'--vcfanno_n_proc {threads}',
-        f'--vep_pick_order biotype,rank,appris,tsl,ccds,canonical,length,mane',
+        f'--vep_pick_order biotype,rank,appris,tsl,ccds,canonical,length,mane_plus_clinical,mane_select',
     ]
 
     # NOTE(SW): VEP pick order is applied as a successive filter:
@@ -209,7 +210,7 @@ def run_germline(input_fp, panel_fp, pcgr_refdata_dir, output_dir, threads=1, pc
         f'--classify_all',
         f'--pcgr_dir {pcgr_refdata_dir}',
         f'--vcfanno_n_proc {threads}',
-        f'--vep_pick_order biotype,rank,appris,tsl,ccds,canonical,length,mane',
+        f'--vep_pick_order biotype,rank,appris,tsl,ccds,canonical,length,mane_plus_clinical,mane_select',
     ]
 
     if pcgrr_conda:
@@ -249,8 +250,8 @@ def transfer_annotations_somatic(input_fp, tumor_name, filter_name, pcgr_dir, ou
         constants.VcfInfo.PCGR_CSQ: 'CSQ',
     }
 
-    pcgr_tsv_fp = pathlib.Path(pcgr_dir) / 'nosampleset.pcgr_acmg.grch38.snvs_indels.tiers.tsv'
-    pcgr_vcf_fp = pathlib.Path(pcgr_dir) / 'nosampleset.pcgr_acmg.grch38.vcf.gz'
+    pcgr_tsv_fp = pathlib.Path(pcgr_dir) / 'nosampleset.pcgr.grch38.snvs_indels.tiers.tsv'
+    pcgr_vcf_fp = pathlib.Path(pcgr_dir) / 'nosampleset.pcgr.grch38.vcf.gz'
 
     # Enforce matching defined and source INFO annotations
     check_annotation_headers(info_field_map, pcgr_vcf_fp)
