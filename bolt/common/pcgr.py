@@ -246,7 +246,7 @@ def transfer_annotations_somatic(input_fp, tumor_name, filter_name, pcgr_dir, ou
     # Set destination INFO field names and source TSV fields
     info_field_map = {
         constants.VcfInfo.PCGR_MUTATION_HOTSPOT: 'MUTATION_HOTSPOT',
-        constants.VcfInfo.PCGR_CLINVAR_CLNSIG: 'CLINVAR_CLNSIG',
+        constants.VcfInfo.PCGR_CLINVAR_CLASSIFICATION: 'CLINVAR_CLASSIFICATION',
         constants.VcfInfo.PCGR_TCGA_PANCANCER_COUNT: 'TCGA_PANCANCER_COUNT',
         constants.VcfInfo.PCGR_CSQ: 'CSQ',
     }
@@ -266,10 +266,8 @@ def transfer_annotations_somatic(input_fp, tumor_name, filter_name, pcgr_dir, ou
     util.add_vcf_header_entry(input_fh, constants.VcfInfo.PCGR_ACTIONABILITY_TIER)
     util.add_vcf_header_entry(input_fh, constants.VcfInfo.PCGR_CSQ)
     util.add_vcf_header_entry(input_fh, constants.VcfInfo.PCGR_MUTATION_HOTSPOT)
-    util.add_vcf_header_entry(input_fh, constants.VcfInfo.PCGR_CLINVAR_CLNSIG)
-    util.add_vcf_header_entry(input_fh, constants.VcfInfo.PCGR_COSMIC_COUNT)
+    util.add_vcf_header_entry(input_fh, constants.VcfInfo.PCGR_CLINVAR_CLASSIFICATION)
     util.add_vcf_header_entry(input_fh, constants.VcfInfo.PCGR_TCGA_PANCANCER_COUNT)
-    util.add_vcf_header_entry(input_fh, constants.VcfInfo.PCGR_ICGC_PCAWG_COUNT)
 
     output_fp = output_dir / f'{tumor_name}.annotations.vcf.gz'
     output_fh = cyvcf2.Writer(output_fp, input_fh, 'wz')
@@ -344,8 +342,8 @@ def check_annotation_headers(info_field_map, vcf_fp):
         header_dst_entry = util.get_vcf_header_entry(header_dst)
         # Remove leading and trailing quotes from source
         header_src_description_unquoted = header_src_entry['Description'].strip('"')
-        assert  header_src_description_unquoted == header_dst_entry['Description']
-
+        if header_src_description_unquoted != header_dst_entry['Description']:
+            raise AssertionError(f"Mismatch for {header_src}:\nVCF: {header_src_description_unquoted}\nExpected: {header_dst_entry['Description']}")
 
 def collect_pcgr_annotation_data(tsv_fp, vcf_fp, info_field_map):
     # Gather all annotations from TSV
@@ -357,25 +355,7 @@ def collect_pcgr_annotation_data(tsv_fp, vcf_fp, info_field_map):
 
             # Process PCGR_ACTIONABILITY_TIER
             # TIER 1, TIER 2, TIER 3, TIER 4, NONCODING
-            record_ann[constants.VcfInfo.PCGR_ACTIONABILITY_TIER] = record['ACTIONABILITY_TIER'].replace(' ', '_')
-
-            # Count COSMIC hits
-            if record['COSMIC_MUTATION_ID'] == 'NA':
-                cosmic_count = 0
-            else:
-                cosmic_count = len(record['COSMIC_MUTATION_ID'].split('&'))
-            record_ann[constants.VcfInfo.PCGR_COSMIC_COUNT] = cosmic_count
-
-            # Count ICGC-PCAWG hits by taking sum of affected donors where the annotation value has
-            # the following format: project_code|tumor_type|affected_donors|tested_donors|frequency
-            icgc_pcawg_count = 0
-            if record['ICGC_PCAWG_OCCURRENCE'] != 'NA':
-                for pcawg_hit_data in record['ICGC_PCAWG_OCCURRENCE'].split(','):
-                    pcawrg_hit_data_fields = pcawg_hit_data.split('|')
-                    affected_donors = int(pcawrg_hit_data_fields[2])
-                    icgc_pcawg_count += affected_donors
-                assert icgc_pcawg_count > 0
-            record_ann[constants.VcfInfo.PCGR_ICGC_PCAWG_COUNT] = icgc_pcawg_count
+            record_ann[constants.VcfInfo.PCGR_ACTIONABILITY_TIER] = record['ACTIONABILITY_TIER']
 
             # Store annotation data
             data_tsv[key] = record_ann
@@ -413,6 +393,24 @@ def collect_cpsr_annotation_data(tsv_fp, vcf_fp, info_field_map):
     # Compile annotations, prefering TSV source
     return compile_annotation_data(data_tsv, data_vcf)
 
+def parse_genomic_change(genomic_change):
+    """
+    Parse a genomic change string, e.g., "3:g.41224645T>C"
+    Returns a tuple: (chrom, pos, ref, alt)
+    """
+    # Regular expression for the format "chrom:g.posRef>Alt"
+    pattern = r'^(?P<chrom>\w+):g\.(?P<pos>\d+)(?P<ref>\w+)>(?P<alt>\w+)$'
+    match = re.match(pattern, genomic_change)
+    if not match:
+        raise ValueError(f"Format not recognized: {genomic_change}")
+    
+    # Get values and format as needed
+    chrom = f"chr{match.group('chrom')}"
+    pos = int(match.group('pos'))
+    ref = match.group('ref')
+    alt = match.group('alt')
+    return chrom, pos, ref, alt
+
 
 def get_annotations_vcf(vcf_fp, info_field_map):
     data_vcf = dict()
@@ -432,10 +430,11 @@ def get_annotations_vcf(vcf_fp, info_field_map):
 
 
 def get_annotation_entry_tsv(record, info_field_map):
-    # Set lookup key; PCGR/CPSR strips leading 'chr' from contig names
-    chrom = f'chr{record["CHROM"]}'
-    pos = int(record['POS'])
-    key = (chrom, pos, record['REF'], record['ALT'])
+    # If GENOMIC_CHANGE is present, parse it for coordinates; otherwise, use separate fields.
+    if "GENOMIC_CHANGE" in record and record["GENOMIC_CHANGE"]:
+        chrom, pos, ref, alt = parse_genomic_change(record["GENOMIC_CHANGE"])
+
+    key = (chrom, pos, ref, alt)
 
     record_ann = dict()
     for info_dst, info_src in info_field_map.items():

@@ -80,7 +80,7 @@ class VcfInfo(enum.Enum):
     PCGR_ACTIONABILITY_TIER = 'PCGR_ACTIONABILITY_TIER'
     PCGR_CSQ = 'PCGR_CSQ'
     PCGR_MUTATION_HOTSPOT = 'PCGR_MUTATION_HOTSPOT'
-    PCGR_CLINVAR_CLNSIG = 'PCGR_CLINVAR_CLNSIG'
+    PCGR_CLINVAR_CLASSIFICATION = 'PCGR_CLINVAR_CLASSIFICATION'
     PCGR_COSMIC_COUNT = 'PCGR_COSMIC_COUNT'
     PCGR_TCGA_PANCANCER_COUNT = 'PCGR_TCGA_PANCANCER_COUNT'
     PCGR_ICGC_PCAWG_COUNT = 'PCGR_ICGC_PCAWG_COUNT'
@@ -256,10 +256,10 @@ VCF_HEADER_ENTRIES = {
         'Type': 'String',
         'Description': 'Known cancer mutation hotspot, as found in cancerhotspots.org. Format: GeneSymbol|Entrez_ID|CodonRefAA|Alt_AA|Q-value',
     },
-    VcfInfo.PCGR_CLINVAR_CLNSIG: {
+    VcfInfo.PCGR_CLINVAR_CLASSIFICATION: {
         'Number': '.',
         'Type': 'String',
-        'Description': 'ClinVar - clinical significance - per phenotype submission',
+        'Description': 'ClinVar - Overall clinical significance of variant on a five-tiered scale',
     },
     VcfInfo.PCGR_COSMIC_COUNT: {
         'Number': '1',
