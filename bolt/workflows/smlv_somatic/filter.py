@@ -181,7 +181,7 @@ def set_filter_data(record, tumor_index):
     # single CLINICAL_POTENTIAL_RESCUE flag
 
     # Get ClinVar clinical significance entries
-    clinvar_clinsig = record.INFO.get(constants.VcfInfo.PCGR_CLINVAR_CLNSIG.value, '')
+    clinvar_clinsig = record.INFO.get(constants.VcfInfo.PCGR_CLINVAR_CLASSIFICATION.value, '')
     clinvar_clinsigs = clinvar_clinsig.split(',')
     # Hit counts in relevant reference somatic mutation databases
     cosmic_count = record.INFO.get(constants.VcfInfo.PCGR_COSMIC_COUNT.value, 0)
