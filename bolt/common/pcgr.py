@@ -6,7 +6,8 @@ import pathlib
 import re
 import shutil
 import tempfile
-import logging
+import gzip  # added import
+
 
 import cyvcf2
 
@@ -275,7 +276,7 @@ def transfer_annotations_somatic(input_fp, tumor_name, pcgr_vcf_fp, pcgr_tsv_fp,
         constants.VcfInfo.PCGR_CSQ: 'CSQ',
     }
 
-    pcgr_tsv_fp = pathlib.Path(pcgr_dir) / 'nosampleset.pcgr.grch38.snvs_indels.tiers.tsv'
+    pcgr_tsv_fp = pathlib.Path(pcgr_dir) / 'nosampleset.pcgr.grch38.snv_indel_ann.tsv.gz'
     pcgr_vcf_fp = pathlib.Path(pcgr_dir) / 'nosampleset.pcgr.grch38.vcf.gz'
 
     # Enforce matching defined and source INFO annotations
@@ -314,7 +315,7 @@ def transfer_annotations_germline(input_fp, normal_name, cpsr_dir, output_dir):
         constants.VcfInfo.CPSR_CSQ: 'CSQ',
     }
 
-    cpsr_tsv_fp = pathlib.Path(cpsr_dir) / f'{normal_name}.cpsr.grch38.classification.tsv.gz'
+    cpsr_tsv_fp = pathlib.Path(cpsr_dir) / f'{normal_name}.cpsr.grch38.snv_indel_ann.tsv.gzv'
     cpsr_vcf_fp = pathlib.Path(cpsr_dir) / f'{normal_name}.cpsr.grch38.vcf.gz'
 
     # Enforce matching defined and source INFO annotations
@@ -370,6 +371,9 @@ def collect_pcgr_annotation_data(tsv_fp, vcf_fp, info_field_map):
             key, record_ann = get_annotation_entry_tsv(record, info_field_map)
             assert key not in data_tsv
 
+            # Process PCGR_ACTIONABILITY_TIER
+            # TIER 1, TIER 2, TIER 3, TIER 4, NONCODING
+            record_ann[constants.VcfInfo.PCGR_ACTIONABILITY_TIER] = record['ACTIONABILITY_TIER'].replace(' ', '_')
 
             # Process PCGR_ACTIONABILITY_TIER
             # TIER 1, TIER 2, TIER 3, TIER 4, NONCODING

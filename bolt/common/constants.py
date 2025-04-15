@@ -41,80 +41,6 @@ PCGR_ACTIONABILITY_TIER_RESCUE = {
 }
 
 
-################################
-## Hypermutated report filter ##
-################################
-PCGR_TIERS_FILTERING = (
-    'TIER_1',
-    'TIER_2',
-    'TIER_3',
-    'TIER_4',
-    'NONCODING',
-)
-
-VEP_IMPACTS_FILTER = (
-    'intergenic',
-    'intronic',
-    'downstream',
-    'upstream',
-    'impacts_other',
-)
-
-GENOMIC_REGIONS_FILTERING = (
-    'difficult',
-    'none',
-    'giab_conf',
-)
-
-HOTSPOT_FIELDS_FILTERING = (
-    'SAGE_HOTSPOT',
-    'hotspot',
-    'PCGR_MUTATION_HOTSPOT',
-)
-
-RETAIN_FIELDS_FILTERING = (
-    'PANEL',
-    *HOTSPOT_FIELDS_FILTERING,
-)
-
-
-################################
-## Hypermutated report filter ##
-################################
-PCGR_TIERS_FILTERING = (
-    'TIER_1',
-    'TIER_2',
-    'TIER_3',
-    'TIER_4',
-    'NONCODING',
-)
-
-VEP_IMPACTS_FILTER = (
-    'intergenic',
-    'intronic',
-    'downstream',
-    'upstream',
-    'impacts_other',
-)
-
-GENOMIC_REGIONS_FILTERING = (
-    'difficult',
-    'none',
-    'giab_conf',
-)
-
-HOTSPOT_FIELDS_FILTERING = (
-    'SAGE_HOTSPOT',
-    'hotspot',
-    'PCGR_MUTATION_HOTSPOT',
-)
-
-RETAIN_FIELDS_FILTERING = (
-    'PANEL',
-    *HOTSPOT_FIELDS_FILTERING,
-)
-
-
 ##################################################
 ## VCF FILTER tags and FORMAT, INFO annotations ##
 ##################################################
@@ -338,7 +264,7 @@ VCF_HEADER_ENTRIES = {
     VcfInfo.PCGR_CLINVAR_CLASSIFICATION: {
         'Number': '.',
         'Type': 'String',
-        'Description': 'ClinVar - clinical significance - per phenotype submissione',
+        'Description': 'ClinVar - clinical significance - per phenotype submission',
     },
     VcfInfo.PCGR_COSMIC_COUNT: {
         'Number': '1',
