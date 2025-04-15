@@ -45,6 +45,7 @@ def entry(ctx, **kwargs):
     # Create output directory
     output_dir = pathlib.Path(kwargs['output_dir'])
     output_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
+    pcgr_dir = output_dir / 'pcgr/'
 
     setup_logging(output_dir)
 
@@ -88,7 +89,6 @@ def entry(ctx, **kwargs):
     #       - Known mutation hotspot [INFO/PCGR_MUTATION_HOTSPOT]
     #       - ClinVar clinical significant [INFO/PCGR_CLNSIG]
     #       - Hits in TCGA [INFO/PCGR_TCGA_PANCANCER_COUNT]
-    #       - Hits in PCAWG [INFO/PCGR_ICGC_PCAWG_COUNT]
     # Set selected data or full input
 
     # selection_data = select_variants(

@@ -264,7 +264,7 @@ VCF_HEADER_ENTRIES = {
     VcfInfo.PCGR_CLINVAR_CLASSIFICATION: {
         'Number': '.',
         'Type': 'String',
-        'Description': 'ClinVar - clinical significance - per phenotype submission',
+        'Description': 'ClinVar - Overall clinical significance of variant on a five-tiered scale',
     },
     VcfInfo.PCGR_COSMIC_COUNT: {
         'Number': '1',

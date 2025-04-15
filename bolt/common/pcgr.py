@@ -373,10 +373,6 @@ def collect_pcgr_annotation_data(tsv_fp, vcf_fp, info_field_map):
 
             # Process PCGR_ACTIONABILITY_TIER
             # TIER 1, TIER 2, TIER 3, TIER 4, NONCODING
-            record_ann[constants.VcfInfo.PCGR_ACTIONABILITY_TIER] = record['ACTIONABILITY_TIER'].replace(' ', '_')
-
-            # Process PCGR_ACTIONABILITY_TIER
-            # TIER 1, TIER 2, TIER 3, TIER 4, NONCODING
             record_ann[constants.VcfInfo.PCGR_ACTIONABILITY_TIER] = record['ACTIONABILITY_TIER']
 
             # Store annotation data
@@ -455,9 +451,6 @@ def get_annotation_entry_tsv(record, info_field_map):
     # If GENOMIC_CHANGE is present, parse it for coordinates; otherwise, use separate fields.
     if "GENOMIC_CHANGE" in record and record["GENOMIC_CHANGE"]:
         chrom, pos, ref, alt = parse_genomic_change(record["GENOMIC_CHANGE"])
-
-    if not chrom.startswith('chr'):
-        chrom = f'chr{chrom}'
 
     key = (chrom, pos, ref, alt)
 
