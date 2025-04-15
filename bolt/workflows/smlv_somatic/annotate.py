@@ -44,6 +44,7 @@ def entry(ctx, **kwargs):
     # Create output directory
     output_dir = pathlib.Path(kwargs['output_dir'])
     output_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
+    pcgr_dir = output_dir / 'pcgr/'
 
     script_name = pathlib.Path(__file__).stem
     setup_logging(output_dir, script_name)

@@ -455,9 +455,6 @@ def get_annotation_entry_tsv(record, info_field_map):
     if "GENOMIC_CHANGE" in record and record["GENOMIC_CHANGE"]:
         chrom, pos, ref, alt = parse_genomic_change(record["GENOMIC_CHANGE"])
 
-    if not chrom.startswith('chr'):
-        chrom = f'chr{chrom}'
-
     key = (chrom, pos, ref, alt)
 
     record_ann = dict()
