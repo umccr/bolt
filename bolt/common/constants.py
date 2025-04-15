@@ -35,9 +35,9 @@ CLINVAR_CLINSIGS_RESCUE = {
     'pathogenic',
     'uncertain_significance',
 }
-PCGR_TIERS_RESCUE = {
-    'TIER_1',
-    'TIER_2',
+PCGR_ACTIONABILITY_TIER_RESCUE = {
+    '1',
+    '2',
 }
 
 
@@ -77,7 +77,7 @@ class VcfInfo(enum.Enum):
     SAGE_NOVEL = 'SAGE_NOVEL'
     SAGE_RESCUE = 'SAGE_RESCUE'
 
-    PCGR_TIER = 'PCGR_TIER'
+    PCGR_ACTIONABILITY_TIER = 'PCGR_ACTIONABILITY_TIER'
     PCGR_CSQ = 'PCGR_CSQ'
     PCGR_MUTATION_HOTSPOT = 'PCGR_MUTATION_HOTSPOT'
     PCGR_CLINVAR_CLNSIG = 'PCGR_CLINVAR_CLNSIG'
@@ -112,7 +112,7 @@ class VcfInfo(enum.Enum):
 
     GNOMAD_AF = 'gnomAD_AF'
 
-    PCGR_TIER_RESCUE = 'PCGR_TIER_RESCUE'
+    PCGR_ACTIONABILITY_TIER_RESCUE = 'PCGR_ACTIONABILITY_TIER_RESCUE'
     SAGE_HOTSPOT_RESCUE = 'SAGE_HOTSPOT_RESCUE'
     CLINICAL_POTENTIAL_RESCUE = 'CLINICAL_POTENTIAL_RESCUE'
 
@@ -226,7 +226,7 @@ VCF_HEADER_ENTRIES = {
         'Description': 'Variant rescued by a matching SAGE call',
     },
 
-    VcfInfo.PCGR_TIER: {
+    VcfInfo.PCGR_ACTIONABILITY_TIER: {
         'Number': '1',
         'Type': 'String',
         'Description': (
@@ -259,7 +259,7 @@ VCF_HEADER_ENTRIES = {
     VcfInfo.PCGR_CLINVAR_CLNSIG: {
         'Number': '.',
         'Type': 'String',
-        'Description': 'ClinVar - clinical significance - per phenotype submissione',
+        'Description': 'ClinVar - clinical significance - per phenotype submission',
     },
     VcfInfo.PCGR_COSMIC_COUNT: {
         'Number': '1',
@@ -317,7 +317,7 @@ VCF_HEADER_ENTRIES = {
         'Type': 'Flag',
         'Description': '',
     },
-    VcfInfo.PCGR_TIER_RESCUE: {
+    VcfInfo.PCGR_ACTIONABILITY_TIER_RESCUE: {
         'Number': '0',
         'Type': 'Flag',
         'Description': '',
