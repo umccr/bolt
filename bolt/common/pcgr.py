@@ -273,8 +273,8 @@ def transfer_annotations_somatic(input_fp, tumor_name, filter_name, pcgr_dir, ou
         constants.VcfInfo.PCGR_CSQ: 'CSQ',
     }
 
-    pcgr_tsv_fp = pathlib.Path(output_dir) / 'nosampleset.pcgr.grch38.snv_indel_ann.tsv.gz'
-    pcgr_vcf_fp = pathlib.Path(output_dir) / 'nosampleset.pcgr.grch38.vcf.gz'
+    pcgr_tsv_fp = pathlib.Path(pcgr_dir) / 'nosampleset.pcgr.grch38.snv_indel_ann.tsv.gz'
+    pcgr_vcf_fp = pathlib.Path(pcgr_dir) / 'nosampleset.pcgr.grch38.vcf.gz'
 
     # Enforce matching defined and source INFO annotations
     check_annotation_headers(info_field_map, pcgr_vcf_fp)
@@ -316,7 +316,7 @@ def transfer_annotations_germline(input_fp, normal_name, cpsr_dir, output_dir):
         constants.VcfInfo.CPSR_CSQ: 'CSQ',
     }
 
-    cpsr_tsv_fp = pathlib.Path(cpsr_dir) / f'{normal_name}.cpsr.grch38.classification.tsv.gz'
+    cpsr_tsv_fp = pathlib.Path(cpsr_dir) / f'{normal_name}.cpsr.grch38.snv_indel_ann.tsv.gzv'
     cpsr_vcf_fp = pathlib.Path(cpsr_dir) / f'{normal_name}.cpsr.grch38.vcf.gz'
 
     # Enforce matching defined and source INFO annotations
@@ -367,12 +367,14 @@ def check_annotation_headers(info_field_map, vcf_fp):
 def collect_pcgr_annotation_data(tsv_fp, vcf_fp, info_field_map):
     # Gather all annotations from TSV
     data_tsv = dict()
-    logger.info(f"Collecting PCGR annotations from {tsv_fp} and {vcf_fp}")
     with gzip.open(tsv_fp, 'rt') as tsv_fh:
         for record in csv.DictReader(tsv_fh, delimiter='\t'):
             key, record_ann = get_annotation_entry_tsv(record, info_field_map)
             assert key not in data_tsv
 
+            # Process PCGR_ACTIONABILITY_TIER
+            # TIER 1, TIER 2, TIER 3, TIER 4, NONCODING
+            record_ann[constants.VcfInfo.PCGR_ACTIONABILITY_TIER] = record['ACTIONABILITY_TIER'].replace(' ', '_')
 
             # Process PCGR_ACTIONABILITY_TIER
             # TIER 1, TIER 2, TIER 3, TIER 4, NONCODING
