@@ -3,6 +3,7 @@ import pathlib
 import re
 import shutil
 import tempfile
+import gzip  # added import
 
 
 import cyvcf2
@@ -250,7 +251,7 @@ def transfer_annotations_somatic(input_fp, tumor_name, filter_name, pcgr_dir, ou
         constants.VcfInfo.PCGR_CSQ: 'CSQ',
     }
 
-    pcgr_tsv_fp = pathlib.Path(pcgr_dir) / 'nosampleset.pcgr.grch38.snvs_indels.tiers.tsv'
+    pcgr_tsv_fp = pathlib.Path(pcgr_dir) / 'nosampleset.pcgr.grch38.snv_indel_ann.tsv.gz'
     pcgr_vcf_fp = pathlib.Path(pcgr_dir) / 'nosampleset.pcgr.grch38.vcf.gz'
 
     # Enforce matching defined and source INFO annotations
@@ -262,7 +263,7 @@ def transfer_annotations_somatic(input_fp, tumor_name, filter_name, pcgr_dir, ou
     # Open filehandles, set required header entries
     input_fh = cyvcf2.VCF(input_fp)
 
-    util.add_vcf_header_entry(input_fh, constants.VcfInfo.PCGR_TIER)
+    util.add_vcf_header_entry(input_fh, constants.VcfInfo.PCGR_ACTIONABILITY_TIER)
     util.add_vcf_header_entry(input_fh, constants.VcfInfo.PCGR_CSQ)
     util.add_vcf_header_entry(input_fh, constants.VcfInfo.PCGR_MUTATION_HOTSPOT)
     util.add_vcf_header_entry(input_fh, constants.VcfInfo.PCGR_CLINVAR_CLNSIG)
@@ -296,7 +297,7 @@ def transfer_annotations_germline(input_fp, normal_name, cpsr_dir, output_dir):
         constants.VcfInfo.CPSR_CSQ: 'CSQ',
     }
 
-    cpsr_tsv_fp = pathlib.Path(cpsr_dir) / f'{normal_name}.cpsr.grch38.snvs_indels.tiers.tsv'
+    cpsr_tsv_fp = pathlib.Path(cpsr_dir) / f'{normal_name}.cpsr.grch38.snv_indel_ann.tsv.gzv'
     cpsr_vcf_fp = pathlib.Path(cpsr_dir) / f'{normal_name}.cpsr.grch38.vcf.gz'
 
     # Enforce matching defined and source INFO annotations
@@ -337,6 +338,7 @@ def check_annotation_headers(info_field_map, vcf_fp):
         try:
             header_src_entry = vcf_fh.get_header_type(header_src)
         except KeyError:
+            print(f"Missing in VCF: {header_src}")
             continue
 
         header_dst_entry = util.get_vcf_header_entry(header_dst)
@@ -348,14 +350,14 @@ def check_annotation_headers(info_field_map, vcf_fp):
 def collect_pcgr_annotation_data(tsv_fp, vcf_fp, info_field_map):
     # Gather all annotations from TSV
     data_tsv = dict()
-    with open(tsv_fp, 'r') as tsv_fh:
+    with gzip.open(tsv_fp, 'rt') as tsv_fh:
         for record in csv.DictReader(tsv_fh, delimiter='\t'):
             key, record_ann = get_annotation_entry_tsv(record, info_field_map)
             assert key not in data_tsv
 
-            # Process PCGR_TIER
-            # TIER_1, TIER_2, TIER_3, TIER_4, NONCODING
-            record_ann[constants.VcfInfo.PCGR_TIER] = record['TIER'].replace(' ', '_')
+            # Process PCGR_ACTIONABILITY_TIER
+            # TIER 1, TIER 2, TIER 3, TIER 4, NONCODING
+            record_ann[constants.VcfInfo.PCGR_ACTIONABILITY_TIER] = record['ACTIONABILITY_TIER'].replace(' ', '_')
 
             # Count COSMIC hits
             if record['COSMIC_MUTATION_ID'] == 'NA':
