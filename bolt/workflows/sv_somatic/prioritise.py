@@ -191,10 +191,18 @@ def parse_info_field(record, field_name):
 
 
 def parse_read_support_field(record, field_name):
-    if (data := record.format(field_name)):
+    """
+    Safely pull FORMAT/<field_name>. Returns first sample’s first value,
+    or '' if the tag is missing or empty.
+    """
+    try:
+        data = record.format(field_name)
+    except KeyError:
+        # FORMAT/<field_name> not in header → skip
+        return ''
+    if data and len(data) > 0:
         return data[0][0]
-    else:
-        return str()
+    return ''
 
 
 def split_records(input_fp, tumor_name, output_dir, variant_type):
