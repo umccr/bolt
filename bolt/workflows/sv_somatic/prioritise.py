@@ -97,7 +97,7 @@ def create_sv_tsv(input_fp, tumor_name, output_dir):
 
         # Select most appropriate read support categories
         # NOTE(SW): BNDs can also report breakend support, ignoring in preference to breakpoint support
-        eventtype = record.INFO.get('EVENTTYPE', '')
+        eventtype = record.INFO.get('SVTYPE', '')
         if eventtype == 'SGL':
             read_support_fields = ['BSC', 'BUM', 'BASSR', 'BASRP']
         else:
