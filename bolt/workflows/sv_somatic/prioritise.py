@@ -1,4 +1,5 @@
 import pathlib
+import sys
 
 import click
 import cyvcf2
@@ -186,14 +187,14 @@ def parse_info_field(record, field_name):
 
 def parse_read_support_field(record, field_name):
     """
-    Safely pull FORMAT/<field_name>. Returns first sample’s first value,
-    or '' if the tag is missing or empty.
+    Pull FORMAT/<field_name>. First value,
+    or '' if the tag is empty.
     """
     try:
         data = record.format(field_name)
     except KeyError:
-        # FORMAT/<field_name> not in header → skip
-        return ''
+        print(f"Error: FORMAT field '{field_name}' not found in VCF for record: {record.CHROM}:{record.POS}", file=sys.stderr)
+        sys.exit(1)
     if data and len(data) > 0:
         return data[0][0]
     return ''
