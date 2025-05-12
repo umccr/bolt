@@ -64,7 +64,7 @@ def create_sv_tsv(input_fp, tumor_name, output_dir):
         'start',
         'svtype',
         'VF_alt',
-        'SB_alt',
+        'DF_alt',
         'SF_alt',
         'SR_ref',
         'PR_ref',
@@ -98,7 +98,7 @@ def create_sv_tsv(input_fp, tumor_name, output_dir):
         # NOTE(SW): BNDs can also report breakend support, ignoring in preference to breakpoint support
         eventtype = record.INFO.get('SVTYPE', '')
 
-        read_support_fields = ['VF', 'SB', 'SF', 'REF', 'REFPAIR']
+        read_support_fields = ['VF', 'DF', 'SF', 'REF', 'REFPAIR']
         read_support_data = [parse_read_support_field(record, tag) for tag in read_support_fields]
 
         data = (
@@ -193,8 +193,8 @@ def parse_read_support_field(record, field_name):
     try:
         data = record.format(field_name)
     except KeyError:
-        print(f"Error: FORMAT field '{field_name}' not found in VCF for record: {record.CHROM}:{record.POS}", file=sys.stderr)
-        sys.exit(1)
+        error_message = f"Error: FORMAT field '{field_name}' not found in VCF for record: {record.CHROM}:{record.POS}"
+        raise ValueError(error_message)
     if data and len(data) > 0:
         return data[0][0]
     return ''
