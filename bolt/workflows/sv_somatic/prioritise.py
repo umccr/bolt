@@ -56,7 +56,7 @@ def entry(ctx, **kwargs):
 def create_sv_tsv(input_fp, tumor_name, output_dir):
 
     # NOTE(SW): the cancer report previously used Manta FORMAT/SR and FORMAT/PR as a diagnostic for
-    # SV quality. However, GRIDSS handles read counts slightly different and has many measures of
+    # SV quality. However, eSVee handles read counts slightly different and has many measures of
     # various read support/non-support. For now I am using FORMAT/SR and FORMAT/RP.
 
     header = (
@@ -202,7 +202,7 @@ def parse_read_support_field(record, field_name):
 
 def split_records(input_fp, tumor_name, output_dir, variant_type):
     if variant_type == 'sv':
-        source = 'sv_gridss'
+        source = 'sv_esvee'
     elif variant_type == 'cnv':
         source = 'cnv_purple'
     else:
