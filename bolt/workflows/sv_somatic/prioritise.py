@@ -1,5 +1,4 @@
 import pathlib
-import sys
 
 import click
 import cyvcf2
