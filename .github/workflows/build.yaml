@@ -16,13 +16,25 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build image
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push image
         run: |
           if [[ "${{ matrix.build_name }}" == "base" ]]; then
             docker_tag=bolt:${GITHUB_REF_NAME#v};
@@ -31,4 +43,12 @@ jobs:
             docker_tag=bolt:${GITHUB_REF_NAME#v}-${{ matrix.build_name }};
             dockerfile_fn=Dockerfile.${{ matrix.build_name }};
           fi;
-          docker build --push -f docker/${dockerfile_fn} -t ghcr.io/${{ github.repository_owner }}/${docker_tag} .;
+
+          # Build and push to docker.io and GHCR umccr registries
+          docker build \
+            --platform linux/amd64 \
+            -f docker/${dockerfile_fn} \
+            -t ghcr.io/umccr/${docker_tag} \
+            -t docker.io/umccr/${docker_tag} \
+            --push \
+            .;
