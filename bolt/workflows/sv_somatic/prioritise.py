@@ -56,7 +56,7 @@ def create_sv_tsv(input_fp, tumor_name, output_dir):
 
     # NOTE(SW): the cancer report previously used Manta FORMAT/SR and FORMAT/PR as a diagnostic for
     # SV quality. However, eSVee handles read counts slightly different and has many measures of
-    # various read support/non-support. For now I am using FORMAT/SR and FORMAT/RP.
+    # various read support/non-support. For now I am using FORMAT/DF and FORMAT/.
 
     header = (
         'chrom',
@@ -68,6 +68,7 @@ def create_sv_tsv(input_fp, tumor_name, output_dir):
         'SR_ref',
         'PR_ref',
         'QUAL',
+        'filter',
         'tier',
         'annotation',
         'AF_PURPLE',
@@ -106,6 +107,7 @@ def create_sv_tsv(input_fp, tumor_name, output_dir):
             eventtype,
             *read_support_data,
             record.QUAL,
+            record.FILTER,
             record.INFO.get('SV_TOP_TIER', 4),
             record.INFO['SIMPLE_ANN'],
             parse_info_field(record, 'PURPLE_AF'),
