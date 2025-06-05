@@ -76,7 +76,7 @@ def compile_variants(sv_fp, cnv_fp, tumor_name, ref_fp, output_dir):
 
     # SVs
     for record in sv_fh:
-        record.INFO['SOURCE'] = 'sv_gridss'
+        record.INFO['SOURCE'] = 'sv_esvee'
         output_fh.write_record(record)
 
     # CNVs
