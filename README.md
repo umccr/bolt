@@ -54,12 +54,12 @@ the software environment and dependencies. Consequently, dependencies are split 
 
 | Name    | Docker image URI                    | Commands                       |
 | ---     | ---                                 | ---                            |
-| pcgr    | ghcr.io/scwatts/bolt:0.2.13-pcgr    | • `bolt smlv_germline report`<br />• `bolt smlv_somatic annotate`<br />• `bolt smlv_somatic report`<br /> |
-| gpgr    | ghcr.io/scwatts/bolt:0.2.13-gpgr    | • `bolt other cancer_report`   |
-| snpeff  | ghcr.io/scwatts/bolt:0.2.13-snpeff  | • `bolt sv_somatic annotate`   |
-| circos  | ghcr.io/scwatts/bolt:0.2.13-circos  | • `bolt other purple_baf_plot` |
-| multiqc | ghcr.io/scwatts/bolt:0.2.13-multiqc | • `bolt other multiqc_report`  |
-| base    | ghcr.io/scwatts/bolt:0.2.13         | • `bolt smlv_germline prepare`<br />• `bolt smlv_somatic rescue`<br />• `bolt smlv_somatic filter`<br />• `bolt sv_somatic prioritise`<br /> |
+| pcgr    | ghcr.io/scwatts/bolt:0.2.14-pcgr    | • `bolt smlv_germline report`<br />• `bolt smlv_somatic annotate`<br />• `bolt smlv_somatic report`<br /> |
+| gpgr    | ghcr.io/scwatts/bolt:0.2.14-gpgr    | • `bolt other cancer_report`   |
+| snpeff  | ghcr.io/scwatts/bolt:0.2.14-snpeff  | • `bolt sv_somatic annotate`   |
+| circos  | ghcr.io/scwatts/bolt:0.2.14-circos  | • `bolt other purple_baf_plot` |
+| multiqc | ghcr.io/scwatts/bolt:0.2.14-multiqc | • `bolt other multiqc_report`  |
+| base    | ghcr.io/scwatts/bolt:0.2.14         | • `bolt smlv_germline prepare`<br />• `bolt smlv_somatic rescue`<br />• `bolt smlv_somatic filter`<br />• `bolt sv_somatic prioritise`<br /> |
 
 ## Usage
 
@@ -67,7 +67,7 @@ Given the nature of software dependencies required, it is strongly recommended t
 [Docker images](#docker-images):
 
 ```bash
-docker run -ti -v $(pwd):$(pwd) -w $(pwd) ghcr.io/scwatts/bolt:0.2.13 \
+docker run -ti -v $(pwd):$(pwd) -w $(pwd) ghcr.io/scwatts/bolt:0.2.14 \
   bolt smlv_somatic filter \
     --tumor_name tumor_sample \
     --vcf_fp tumor_sample.vcf.gz \

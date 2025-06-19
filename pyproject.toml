@@ -8,7 +8,7 @@ include = ["bolt*"]
 
 [project]
 name = "bolt"
-version = "0.2.13"
+version = "0.2.14"
 authors = [
   {name = "Stephen Watts", email = "stephen.watts@umccr.org"},
 ]
