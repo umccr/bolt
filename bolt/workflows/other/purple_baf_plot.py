@@ -44,6 +44,10 @@ def entry(ctx, **kwargs):
             cp ${{src_fp}} {output_dir}/;
         done;
 
+        # Purple 4.1 introduced bezier radius in link file that overrides circos config. Removed for plot readability.
+        # e.g: color=black,bezier_radius=0.189r
+        sed -i 's/,bezier_radius=[0-9.]*r//g' {output_dir}/{kwargs["tumor_name"]}.link.circos;
+
         cp {circos_gaps_fp} {output_dir}/gaps.txt;
 
         circos \

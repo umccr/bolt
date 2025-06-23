@@ -55,21 +55,20 @@ def entry(ctx, **kwargs):
 def create_sv_tsv(input_fp, tumor_name, output_dir):
 
     # NOTE(SW): the cancer report previously used Manta FORMAT/SR and FORMAT/PR as a diagnostic for
-    # SV quality. However, GRIDSS handles read counts slightly different and has many measures of
-    # various read support/non-support. For now I am using FORMAT/SR and FORMAT/RP.
+    # SV quality. However, eSVee handles read counts slightly different and has many measures of
+    # various read support/non-support. For now I am using FORMAT/DF and FORMAT/SF.
 
     header = (
         'chrom',
         'start',
         'svtype',
-        'SR_alt',
-        'PR_alt',
-        'SR_asm_alt',
-        'PR_asm_alt',
-        'IC_alt',
-        'SR_ref',
-        'PR_ref',
+        'VF_alt',
+        'DF_alt',
+        'SF_alt',
+        'REF_frag',
+        'REF_pair',
         'QUAL',
+        'filter',
         'tier',
         'annotation',
         'AF_PURPLE',
@@ -97,14 +96,10 @@ def create_sv_tsv(input_fp, tumor_name, output_dir):
 
         # Select most appropriate read support categories
         # NOTE(SW): BNDs can also report breakend support, ignoring in preference to breakpoint support
-        eventtype = record.INFO.get('EVENTTYPE', '')
-        if eventtype == 'SGL':
-            read_support_fields = ['BSC', 'BUM', 'BASSR', 'BASRP']
-        else:
-            read_support_fields = ['SR', 'RP', 'ASSR', 'ASRP']
-        assert len(read_support_fields) == 4
-        read_support_fields.extend(('IC', 'REF', 'REFPAIR'))
-        read_support_data = [parse_read_support_field(record, e) for e in read_support_fields]
+        eventtype = record.INFO.get('SVTYPE', '')
+
+        read_support_fields = ['VF', 'DF', 'SF', 'REF', 'REFPAIR']
+        read_support_data = [parse_read_support_field(record, tag) for tag in read_support_fields]
 
         data = (
             record.CHROM.replace('chr', ''),
@@ -112,6 +107,7 @@ def create_sv_tsv(input_fp, tumor_name, output_dir):
             eventtype,
             *read_support_data,
             record.QUAL,
+            record.FILTER,
             record.INFO.get('SV_TOP_TIER', 4),
             record.INFO['SIMPLE_ANN'],
             parse_info_field(record, 'PURPLE_AF'),
@@ -191,15 +187,23 @@ def parse_info_field(record, field_name):
 
 
 def parse_read_support_field(record, field_name):
-    if (data := record.format(field_name)):
+    """
+    Pull FORMAT/<field_name>. First value,
+    or '' if the tag is empty.
+    """
+    try:
+        data = record.format(field_name)
+    except KeyError:
+        error_message = f"Error: FORMAT field '{field_name}' not found in VCF for record: {record.CHROM}:{record.POS}"
+        raise ValueError(error_message)
+    if data and len(data) > 0:
         return data[0][0]
-    else:
-        return str()
+    return ''
 
 
 def split_records(input_fp, tumor_name, output_dir, variant_type):
     if variant_type == 'sv':
-        source = 'sv_gridss'
+        source = 'sv_esvee'
     elif variant_type == 'cnv':
         source = 'cnv_purple'
     else:
