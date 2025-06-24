@@ -6,6 +6,8 @@ import pathlib
 import re
 import shutil
 import tempfile
+import logging
+import concurrent.futures
 import gzip  # added import
 
 
@@ -14,6 +16,9 @@ import cyvcf2
 
 from .. import util
 from ..common import constants
+
+
+logger = logging.getLogger(__name__)
 
 
 def prepare_vcf_somatic(input_fp, tumor_name, normal_name, output_dir):
@@ -114,17 +119,16 @@ def get_minimal_header(input_fh):
     return '\n'.join([filetype_line, *chrom_lines, *format_lines, column_line])
 
 
-def run_somatic(input_fp, chunk_nbr, pcgr_refdata_dir, pcgr_output_dir, chunk_nbr=None, threads=1, pcgr_conda=None, pcgrr_conda=None, purity=None, ploidy=None, sample_id=None):
+def run_somatic(input_fp, pcgr_refdata_dir, output_dir, chunk_nbr=None, threads=1, pcgr_conda=None, pcgrr_conda=None, purity=None, ploidy=None, sample_id=None):
 
 
+    temp_dir = tempfile.TemporaryDirectory()
     output_dir = output_dir / f"pcgr_{chunk_nbr}" if chunk_nbr is not None else output_dir
 
     if output_dir.exists():
         logger.warning(f"Output directory '{output_dir}' already exists and will be overwritten")
         shutil.rmtree(output_dir)
 
-    # Create output directory
-    output_dir.mkdir(parents=True, exist_ok=True)
 
     if not sample_id:
         sample_id = 'nosampleset'
@@ -145,6 +149,7 @@ def run_somatic(input_fp, chunk_nbr, pcgr_refdata_dir, pcgr_output_dir, chunk_nb
         f'--estimate_tmb',
         #f'--show_noncoding',
         f'--vcfanno_n_proc {threads}',
+        f'--vep_n_forks {threads}',
         f'--vep_pick_order biotype,rank,appris,tsl,ccds,canonical,length,mane_plus_clinical,mane_select',
     ]
 
@@ -180,7 +185,7 @@ def run_somatic(input_fp, chunk_nbr, pcgr_refdata_dir, pcgr_output_dir, chunk_nb
 
     command = fr'''
         pcgr \
-          {command_args_str}
+        {command_args_str}
     '''
 
     if pcgr_conda:
@@ -189,7 +194,7 @@ def run_somatic(input_fp, chunk_nbr, pcgr_refdata_dir, pcgr_output_dir, chunk_nb
         command = command_formatting + command_conda + command
 
     # Log file path
-    log_file_path = output_dir / "run_somatic.log"
+    log_file_path = pathlib.Path(temp_dir.name) / "run_somatic.log"
 
     # Run the command and redirect output to the log file
     util.execute_command(command, log_file_path=log_file_path)
@@ -200,7 +205,7 @@ def run_somatic(input_fp, chunk_nbr, pcgr_refdata_dir, pcgr_output_dir, chunk_nb
     pcgr_vcf_fp = pathlib.Path(output_dir) / f'{sample_id}.pcgr_acmg.grch38.vcf.gz'
 
     # Check if both files exist
-    if not pcgr_tsv_fp.exists():
+    if not pcgr_tsv_fp.exists(): 
         raise FileNotFoundError(f"Expected file {pcgr_tsv_fp} not found.")
     if not pcgr_vcf_fp.exists():
         raise FileNotFoundError(f"Expected file {pcgr_vcf_fp} not found.")
@@ -253,7 +258,7 @@ def run_germline(input_fp, panel_fp, pcgr_refdata_dir, vep_dir, output_dir, thre
 
     command = fr'''
         cpsr \
-          {command_args_str}
+        {command_args_str}
     '''
     if pcgr_conda:
         command_conda = f'conda run -n {pcgr_conda} \\'
@@ -265,7 +270,7 @@ def run_germline(input_fp, panel_fp, pcgr_refdata_dir, vep_dir, output_dir, thre
     return cpsr_output_dir
 
 
-def transfer_annotations_somatic(input_fp, tumor_name, filter_name, pcgr_dir, output_dir):
+def transfer_annotations_somatic(input_fp, tumor_name, pcgr_vcf_fp, pcgr_tsv_fp, output_dir):
     # Set destination INFO field names and source TSV fields
     info_field_map = {
         constants.VcfInfo.PCGR_MUTATION_HOTSPOT: 'MUTATION_HOTSPOT',
@@ -299,10 +304,6 @@ def transfer_annotations_somatic(input_fp, tumor_name, filter_name, pcgr_dir, ou
     for record in input_fh:
         # Do not process chrM since *snvs_indels.tiers.tsv does not include these annotations
         if record.CHROM == 'chrM':
-            continue
-        # Immediately print out variants that were not annotated
-        if filter_name in record.FILTERS:
-            output_fh.write_record(record)
             continue
         # Annotate and write
         record_ann = annotate_record(record, pcgr_data, allow_missing=True)
@@ -520,6 +521,7 @@ def split_vcf(input_vcf, output_dir):
     chunk_number = 1
     variant_count = 0
     base_filename = pathlib.Path(input_vcf).stem
+    chunk_filename = output_dir / f"{base_filename}_chunk{chunk_number}.vcf"
     base_filename = input_vcf.stem
     chunk_filename = output_dir / f"{base_filename}_chunk{chunk_number}.vcf"
     chunk_files.append(chunk_filename)
@@ -549,7 +551,7 @@ def split_vcf(input_vcf, output_dir):
     logger.info(f"VCF file split into {len(chunk_files)} chunks.")
     return chunk_files
 
-def run_somatic_chunck(vcf_chunks, pcgr_data_dir, vep_dir, output_dir, pcgr_output_dir, max_threads, pcgr_conda, pcgrr_conda):
+def run_somatic_chunck(vcf_chunks, pcgr_data_dir, output_dir, pcgr_output_dir, max_threads, pcgr_conda, pcgrr_conda):
     pcgr_tsv_files = []
     pcgr_vcf_files = []
     num_chunks = len(vcf_chunks)
@@ -564,7 +566,7 @@ def run_somatic_chunck(vcf_chunks, pcgr_data_dir, vep_dir, output_dir, pcgr_outp
             # Assign extra thread to the first 'threads_rem' chunks
             additional_thread = 1 if chunk_number <= threads_rem else 0
             total_threads = threads_per_chunk + additional_thread
-            futures[executor.submit(run_somatic, vcf_file, pcgr_data_dir, vep_dir, pcgr_output_dir, chunk_number, total_threads, pcgr_conda, pcgrr_conda)] = chunk_number
+            futures[executor.submit(run_somatic, vcf_file, pcgr_data_dir, pcgr_output_dir, chunk_number, total_threads, pcgr_conda, pcgrr_conda)] = chunk_number
         for future in concurrent.futures.as_completed(futures):
             try:
                 pcgr_tsv_fp, pcgr_vcf_fp = future.result()
@@ -586,7 +588,7 @@ def merging_pcgr_files(output_dir, pcgr_vcf_files, pcgr_tsv_fp):
     util.merge_tsv_files(pcgr_tsv_fp, merged_tsv_fp)
 
     # Step 5: Merge all VCF files into a single file in the pcgr directory
-    merged_vcf_path = pcgr_dir / "nosampleset.pcgr.grch38.pass.vcf.gz"
+    merged_vcf_path = pcgr_dir / "nosampleset.pcgr_acmg.grch38"
     merged_vcf = util.merge_vcf_files(pcgr_vcf_files, merged_vcf_path)
 
     return merged_vcf, merged_tsv_fp

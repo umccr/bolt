@@ -1,11 +1,16 @@
 import gzip
 import pathlib
 import subprocess
-import sys
 import textwrap
+import logging
+from types import SimpleNamespace
 
 
+from .common import pcgr
 from .common import constants
+
+
+logger = logging.getLogger(__name__)
 
 
 # TODO(SW): create note that number this assumes location of `<root>/<package>/<file>`
@@ -16,8 +21,12 @@ def get_project_root():
     return project_root
 
 def execute_command(command, log_file_path=None):
-    logger.info("Executing command: %s", command)
-    # Open the process with stderr merged to stdout
+    logger.info("Executing command: %s", command.strip())
+
+    # Open the log file if provided
+    log_file = log_file_path.open('a', encoding='utf-8') if log_file_path else None
+
+    # Launch process with combined stdout and stderr streams, and line buffering enabled.
     process = subprocess.Popen(
         command,
         shell=True,
@@ -25,38 +34,44 @@ def execute_command(command, log_file_path=None):
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
-        bufsize=1  # Line-buffered output
+        encoding='utf-8',
+        bufsize=1  # line buffered
     )
-    
-    # Capture output in real time
+
+    output_lines = []
+    # Iterate over each line as it becomes available
     with process.stdout:
         for line in iter(process.stdout.readline, ''):
-            logger.info(line.strip())
-            if log_file_path:
-                with open(log_file_path, 'a', encoding='utf-8') as log_file:
+            if line:
+                logger.info(line.strip())
+                output_lines.append(line)
+                if log_file:
                     log_file.write(line)
-    process.wait()
-    return process
+                    log_file.flush()  # flush immediately for real-time logging
+    process.wait()  # wait for the process to complete
+
+    if log_file:
+        log_file.close()
+
+    result = SimpleNamespace(
+        stdout=''.join(output_lines),
+        returncode=process.returncode,
+        pid=process.pid,
+        command=command
+    )
+
+    return result
 
 def command_prepare(command):
     return f'set -o pipefail; {textwrap.dedent(command)}'
 
-
-#def count_vcf_records(fp, exclude_args=None):
-#    args = list()
-#    if exclude_args:
-#        args.append(f'-e \'{exclude_args}\'')
-#
-#    args_str = ' '.join(args)
-#    command = f'bcftools view -H {args_str} {fp} | wc -l'
-#
-#    result = execute_command(command)
-#    return int(result.stdout)
-
-
 def count_vcf_records(fp):
-    result = execute_command(f'bcftools view -H {fp} | wc -l')
-    return int(result.stdout)
+    result = subprocess.run(f'bcftools view -H {fp} | wc -l',
+                            shell=True,
+                            executable="/bin/bash",
+                            capture_output=True,
+                            text=True )
+    return int(result.stdout.strip())
 
 
 def add_vcf_header_entry(fh, anno_enum):
@@ -105,53 +120,13 @@ def split_vcf(input_vcf, output_dir):
     output_dir = pathlib.Path(output_dir / "vcf_chunks")
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    chunk_files = []
-    chunk_number = 1
-    variant_count = 0
-    base_filename = pathlib.Path(input_vcf).stem
-    chunk_filename = output_dir / f"{base_filename}_chunk{chunk_number}.vcf"
-    chunk_files.append(chunk_filename)
-
-    # Open the input VCF using cyvcf2
-    vcf_in = cyvcf2.VCF(input_vcf)
-    # Create a new VCF file for the first chunk
-    vcf_out = cyvcf2.Writer(str(chunk_filename), vcf_in)
-
-    last_position = None
-
-    for record in vcf_in:
-        current_position = record.POS
-        # Check if we need to start a new chunk
-        if variant_count >= constants.MAX_SOMATIC_VARIANTS and (last_position is None or current_position != last_position):
-            # Close the current chunk file and start a new one
-            vcf_out.close()
-            chunk_number += 1
-            chunk_filename = output_dir / "vcf_chunks" / f"{base_filename}_chunk{chunk_number}.vcf"
-            chunk_files.append(chunk_filename)
-            vcf_out = cyvcf2.Writer(str(chunk_filename), vcf_in)
-            variant_count = 0
-
-        # Write the record to the current chunk
-        vcf_out.write_record(record)
-        variant_count += 1
-        last_position = current_position
-
-    # Close the last chunk file
-    vcf_out.close()
-    vcf_in.close()
-
-    logger.info(f"VCF file split into {len(chunk_files)} chunks.")
-
-    return chunk_files
-
 def merge_tsv_files(tsv_files, merged_tsv_fp):
     """
     Merges all TSV files into a single TSV.
     """
-    logger.info("Merging TSV files...")
-    with gzip.open(merged_tsv_fp, 'wt') as merged_tsv:
+    with open(merged_tsv_fp, 'w') as merged_tsv:
         for i, tsv_file in enumerate(tsv_files):
-            with gzip.open(tsv_file, 'rt') as infile:
+            with open(tsv_file, 'r') as infile:
                 for line_number, line in enumerate(infile):
                     # Skip header except for the first file
                     if i > 0 and line_number == 0:
@@ -171,7 +146,6 @@ def merge_vcf_files(vcf_files, merged_vcf_fp):
     Returns:
     - Path to the sorted merged VCF file.
     """
-    logger.info("Merging VCF files...")
     merged_vcf_fp = pathlib.Path(merged_vcf_fp)
     merged_unsorted_vcf = merged_vcf_fp.with_suffix('.unsorted.vcf.gz')
     merged_vcf = merged_vcf_fp.with_suffix('.vcf.gz')

@@ -1,3 +1,4 @@
+import logging
 import pathlib
 
 
@@ -8,6 +9,10 @@ import cyvcf2
 from ... import util
 from ...common import constants
 from ...common import pcgr
+from ...logging_config import setup_logging
+
+
+logger = logging.getLogger(__name__)
 
 
 @click.command(name='annotate')
@@ -44,6 +49,9 @@ def entry(ctx, **kwargs):
     # Create output directory
     output_dir = pathlib.Path(kwargs['output_dir'])
     output_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
+
+    script_name = pathlib.Path(__file__).stem
+    setup_logging(output_dir, script_name)
 
     script_name = pathlib.Path(__file__).stem
     setup_logging(output_dir, script_name)
@@ -100,7 +108,7 @@ def entry(ctx, **kwargs):
 
     # Prepare VCF for PCGR annotation
     pcgr_prep_fp = pcgr.prepare_vcf_somatic(
-        pcgr_prep_input_fp,
+        pon_fp,
         kwargs['tumor_name'],
         kwargs['normal_name'],
         output_dir,
@@ -112,14 +120,13 @@ def entry(ctx, **kwargs):
 
     # Run PCGR in chunks if the total number of variants exceeds the maximum allowed for somatic variants
     if total_variants > constants.MAX_SOMATIC_VARIANTS:
-        vcf_chunks = util.split_vcf(
+        vcf_chunks = pcgr.split_vcf(
             pcgr_prep_fp,
             output_dir
         )
-        pcgr_tsv_fp, pcgr_vcf_fp = run_somatic_chunck(
+        pcgr_tsv_fp, pcgr_vcf_fp = pcgr.run_somatic_chunck(
         vcf_chunks,
         kwargs['pcgr_data_dir'],
-        kwargs['vep_dir'],
         output_dir,
         pcgr_output_dir,
         kwargs['threads'],
@@ -130,7 +137,6 @@ def entry(ctx, **kwargs):
         pcgr_tsv_fp, pcgr_vcf_fp = pcgr.run_somatic(
         pcgr_prep_fp,
         kwargs['pcgr_data_dir'],
-        kwargs['vep_dir'],
         pcgr_output_dir,
         chunk_nbr=None,
         threads=kwargs['threads'],
@@ -140,13 +146,13 @@ def entry(ctx, **kwargs):
 
     # Transfer PCGR annotations to full set of variants
     pcgr.transfer_annotations_somatic(
-        selection_data['selected'],
+        pon_fp,
         kwargs['tumor_name'],
-        selection_data.get('filter_name'),
-        pcgr_dir,
+        pcgr_vcf_fp,
+        pcgr_tsv_fp,
         output_dir,
     )
-
+    logger.info("Annotation process completed")
 
 def set_filter_pass(input_fp, tumor_name, output_dir):
     output_fp = output_dir / f'{tumor_name}.set_filter_pass.vcf.gz'
@@ -160,7 +166,6 @@ def set_filter_pass(input_fp, tumor_name, output_dir):
         output_fh.write_record(record)
 
     return output_fp
-
 
 def general_annotations(input_fp, tumor_name, threads, annotations_dir, output_dir):
     toml_fp = pathlib.Path(annotations_dir) / 'vcfanno_annotations.toml'
@@ -193,7 +198,6 @@ def panel_of_normal_annotations(input_fp, tumor_name, threads, pon_dir, output_d
 
     util.execute_command(command)
     return output_fp
-
 
 def select_variants(input_fp, tumor_name, cancer_genes_fp, output_dir):
     # Exclude variants until we hopefully move the needle below the threshold
