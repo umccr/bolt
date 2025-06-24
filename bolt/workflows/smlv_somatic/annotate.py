@@ -80,10 +80,8 @@ def entry(ctx, **kwargs):
     #       - PCGR ACMG TIER [INFO/PCGR_TIER]
     #       - VEP consequence [INFO/PCR_CSQ]
     #       - Known mutation hotspot [INFO/PCGR_MUTATION_HOTSPOT]
-    #       - ClinVar clinical significant [INFO/PCGR_CLINVAR_CLNSIG]
-    #       - Hits in COSMIC [INFO/PCGR_COSMIC_COUNT]
+    #       - ClinVar clinical significant [INFO/PCGR_CLNSIG]
     #       - Hits in TCGA [INFO/PCGR_TCGA_PANCANCER_COUNT]
-    #       - Hits in PCAWG [INFO/PCGR_ICGC_PCAWG_COUNT]
     # Set selected data or full input
     selection_data = select_variants(
         pon_fp,
