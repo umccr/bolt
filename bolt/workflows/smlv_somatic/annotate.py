@@ -23,6 +23,7 @@ from ...common import pcgr
 @click.option('--pon_dir', required=True, type=click.Path(exists=True))
 
 @click.option('--pcgr_data_dir', required=True, type=click.Path(exists=True))
+@click.option('--vep_dir', required=True, type=click.Path(exists=True))
 
 @click.option('--pcgr_conda', required=False, type=str)
 @click.option('--pcgrr_conda', required=False, type=str)
@@ -105,7 +106,20 @@ def entry(ctx, **kwargs):
     pcgr_dir = pcgr.run_somatic(
         pcgr_prep_fp,
         kwargs['pcgr_data_dir'],
+        kwargs['vep_dir'],
         output_dir,
+        pcgr_output_dir,
+        kwargs['threads'],
+        kwargs['pcgr_conda'],
+        kwargs['pcgrr_conda']
+    )
+    else:
+        pcgr_tsv_fp, pcgr_vcf_fp = pcgr.run_somatic(
+        pcgr_prep_fp,
+        kwargs['pcgr_data_dir'],
+        kwargs['vep_dir'],
+        pcgr_output_dir,
+        chunk_nbr=None,
         threads=kwargs['threads'],
         pcgr_conda=kwargs['pcgr_conda'],
         pcgrr_conda=kwargs['pcgrr_conda'],
