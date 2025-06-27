@@ -119,7 +119,7 @@ def get_minimal_header(input_fh):
     return '\n'.join([filetype_line, *chrom_lines, *format_lines, column_line])
 
 
-def run_somatic(input_fp, pcgr_refdata_dir, output_dir, chunk_nbr=None, threads=1, pcgr_conda=None, pcgrr_conda=None, purity=None, ploidy=None, sample_id=None):
+def run_somatic(input_fp, pcgr_refdata_dir, vep_dir, output_dir, chunk_nbr=None, threads=1, pcgr_conda=None, pcgrr_conda=None, purity=None, ploidy=None, sample_id=None):
 
     # NOTE(SW): Nextflow FusionFS v2.2.8 does not support PCGR output to S3; instead write to a
     # temporary directory outside of the FusionFS mounted directory then manually copy across
@@ -138,7 +138,7 @@ def run_somatic(input_fp, pcgr_refdata_dir, output_dir, chunk_nbr=None, threads=
     command_args = [
         f'--sample_id {sample_id}',
         f'--input_vcf {input_fp}',
-        f'--vep_dir {pcgr_refdata_dir}',
+        f'--vep_dir {vep_dir}',
         f'--refdata_dir {pcgr_refdata_dir}',
         f'--tumor_dp_tag TUMOR_DP',
         f'--tumor_af_tag TUMOR_AF',
@@ -215,7 +215,7 @@ def run_somatic(input_fp, pcgr_refdata_dir, output_dir, chunk_nbr=None, threads=
     return pcgr_tsv_fp, pcgr_vcf_fp
 
 
-def run_germline(input_fp, panel_fp, pcgr_refdata_dir, output_dir, threads=1, pcgr_conda=None, pcgrr_conda=None, sample_id=None):
+def run_germline(input_fp, panel_fp, pcgr_refdata_dir, vep_dir, output_dir, threads=1, pcgr_conda=None, pcgrr_conda=None, sample_id=None):
 
     if not sample_id:
         sample_id = 'nosampleset'
@@ -226,19 +226,22 @@ def run_germline(input_fp, panel_fp, pcgr_refdata_dir, output_dir, threads=1, pc
     temp_dir = tempfile.TemporaryDirectory()
     cpsr_output_dir = output_dir / 'cpsr/'
 
+    if cpsr_output_dir.exists():
+        logger.warning(f"Output directory '{cpsr_output_dir}' already exists and will be overwritten")
+        shutil.rmtree(cpsr_output_dir)
+
     command_args = [
         f'--sample_id {sample_id}',
         f'--input_vcf {input_fp}',
         f'--genome_assembly grch38',
         f'--custom_list {panel_fp}',
-        f'--vep_dir {pcgr_refdata_dir}',
+        f'--vep_dir {vep_dir}',
         f'--refdata_dir {pcgr_refdata_dir}',
         # NOTE(SW): probably useful to add versioning information here; weigh against maintainence
         # burden
         f'--custom_list_name umccr_germline_panel',
         f'--pop_gnomad global',
         f'--classify_all',
-        f'--pcgr_dir {pcgr_refdata_dir}',
         f'--vcfanno_n_proc {threads}',
         f'--vep_pick_order biotype,rank,appris,tsl,ccds,canonical,length,mane_plus_clinical,mane_select',
     ]
@@ -551,7 +554,7 @@ def split_vcf(input_vcf, output_dir):
     logger.info(f"VCF file split into {len(chunk_files)} chunks.")
     return chunk_files
 
-def run_somatic_chunck(vcf_chunks, pcgr_data_dir, output_dir, pcgr_output_dir, max_threads, pcgr_conda, pcgrr_conda):
+def run_somatic_chunck(vcf_chunks, pcgr_data_dir, vep_dir, output_dir, pcgr_output_dir, max_threads, pcgr_conda, pcgrr_conda):
     pcgr_tsv_files = []
     pcgr_vcf_files = []
     num_chunks = len(vcf_chunks)
@@ -566,7 +569,7 @@ def run_somatic_chunck(vcf_chunks, pcgr_data_dir, output_dir, pcgr_output_dir, m
             # Assign extra thread to the first 'threads_rem' chunks
             additional_thread = 1 if chunk_number <= threads_rem else 0
             total_threads = threads_per_chunk + additional_thread
-            futures[executor.submit(run_somatic, vcf_file, pcgr_data_dir, pcgr_output_dir, chunk_number, total_threads, pcgr_conda, pcgrr_conda)] = chunk_number
+            futures[executor.submit(run_somatic, vcf_file, pcgr_data_dir, vep_dir, pcgr_output_dir, chunk_number, total_threads, pcgr_conda, pcgrr_conda)] = chunk_number
         for future in concurrent.futures.as_completed(futures):
             try:
                 pcgr_tsv_fp, pcgr_vcf_fp = future.result()
