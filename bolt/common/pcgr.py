@@ -231,6 +231,8 @@ def run_germline(input_fp, panel_fp, pcgr_refdata_dir, output_dir, threads=1, pc
         f'--input_vcf {input_fp}',
         f'--genome_assembly grch38',
         f'--custom_list {panel_fp}',
+        f'--vep_dir {pcgr_refdata_dir}',
+        f'--refdata_dir {pcgr_refdata_dir}',
         # NOTE(SW): probably useful to add versioning information here; weigh against maintainence
         # burden
         f'--custom_list_name umccr_germline_panel',
@@ -278,8 +280,8 @@ def transfer_annotations_somatic(input_fp, tumor_name, pcgr_vcf_fp, pcgr_tsv_fp,
         constants.VcfInfo.PCGR_CSQ: 'CSQ',
     }
 
-    pcgr_tsv_fp = pathlib.Path(pcgr_dir) / 'nosampleset.pcgr.grch38.snv_indel_ann.tsv.gz'
-    pcgr_vcf_fp = pathlib.Path(pcgr_dir) / 'nosampleset.pcgr.grch38.vcf.gz'
+    pcgr_tsv_fp = pathlib.Path(output_dir) / 'nosampleset.pcgr.grch38.snv_indel_ann.tsv.gz'
+    pcgr_vcf_fp = pathlib.Path(output_dir) / 'nosampleset.pcgr.grch38.vcf.gz'
 
     # Enforce matching defined and source INFO annotations
     check_annotation_headers(info_field_map, pcgr_vcf_fp)
