@@ -138,6 +138,7 @@ def entry(ctx, **kwargs):
     pcgr.run_somatic(
         pcgr_prep_fp,
         kwargs['pcgr_data_dir'],
+        kwargs['vep_dir'],
         pcgr_output_dir,
         threads=kwargs['threads'],
         pcgr_conda=kwargs['pcgr_conda'],
