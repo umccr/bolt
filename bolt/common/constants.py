@@ -124,8 +124,6 @@ class VcfInfo(enum.Enum):
     PCGR_TCGA_PANCANCER_COUNT = 'PCGR_TCGA_PANCANCER_COUNT'
     PCGR_ICGC_PCAWG_COUNT = 'PCGR_ICGC_PCAWG_COUNT'
 
-    CPSR_FINAL_CLASSIFICATION = 'CPSR_FINAL_CLASSIFICATION'
-    CPSR_PATHOGENICITY_SCORE = 'CPSR_PATHOGENICITY_SCORE'
     CPSR_CLINVAR_CLASSIFICATION = 'CPSR_CLINVAR_CLASSIFICATION'
     CPSR_CSQ = 'CPSR_CSQ'
 
@@ -321,23 +319,10 @@ VCF_HEADER_ENTRIES = {
         'Description': 'Count of ICGC PCAWG hits',
     },
 
-    VcfInfo.CPSR_FINAL_CLASSIFICATION: {
-        'Number': '1',
-        'Type': 'String',
-        'Description': (
-            'Final variant classification based on the combination of CLINVAR_CLASSIFICTION (for '
-            'ClinVar-classified variants), and CPSR_CLASSIFICATION (for novel variants)'
-        ),
-    },
-    VcfInfo.CPSR_PATHOGENICITY_SCORE: {
-        'Number': '1',
-        'Type': 'Float',
-        'Description': 'Aggregated CPSR pathogenicity score',
-    },
     VcfInfo.CPSR_CLINVAR_CLASSIFICATION: {
         'Number': '1',
         'Type': 'String',
-        'Description': 'Clinical significance of variant on a five-tiered scale',
+        'Description': 'ClinVar - Overall clinical significance of variant on a five-tiered scale',
     },
     VcfInfo.CPSR_CSQ: {
         'Number': '.',
@@ -346,13 +331,13 @@ VCF_HEADER_ENTRIES = {
             'Consequence annotations from Ensembl VEP. Format: Allele|Consequence|IMPACT|SYMBOL|'
             'Gene|Feature_type|Feature|BIOTYPE|EXON|INTRON|HGVSc|HGVSp|cDNA_position|CDS_position|'
             'Protein_position|Amino_acids|Codons|Existing_variation|ALLELE_NUM|DISTANCE|STRAND|'
-            'FLAGS|PICK|VARIANT_CLASS|SYMBOL_SOURCE|HGNC_ID|CANONICAL|MANE_SELECT|'
-            'MANE_PLUS_CLINICAL|APPRIS|CCDS|ENSP|SWISSPROT|TREMBL|UNIPARC|UNIPROT_ISOFORM|RefSeq|'
-            'DOMAINS|HGVS_OFFSET|AF|AFR_AF|AMR_AF|EAS_AF|EUR_AF|SAS_AF|gnomAD_AF|gnomAD_AFR_AF|'
-            'gnomAD_AMR_AF|gnomAD_ASJ_AF|gnomAD_EAS_AF|gnomAD_FIN_AF|gnomAD_NFE_AF|gnomAD_OTH_AF|'
-            'gnomAD_SAS_AF|CLIN_SIG|SOMATIC|PHENO|CHECK_REF|MOTIF_NAME|MOTIF_POS|HIGH_INF_POS|'
-            'MOTIF_SCORE_CHANGE|TRANSCRIPTION_FACTORS|NearestExonJB|LoF|LoF_filter|LoF_flags|'
-            'LoF_info'
+            'FLAGS|PICK|VARIANT_CLASS|SYMBOL_SOURCE|HGNC_ID|CANONICAL|MANE|MANE_SELECT|'
+            'MANE_PLUS_CLINICAL|TSL|APPRIS|CCDS|ENSP|SWISSPROT|TREMBL|UNIPARC|UNIPROT_ISOFORM|RefSeq|'
+            'DOMAINS|HGVS_OFFSET|gnomADe_AF|gnomADe_AFR_AF|gnomADe_AMR_AF|gnomADe_ASJ_AF|'
+            'gnomADe_EAS_AF|gnomADe_FIN_AF|gnomADe_MID_AF|gnomADe_NFE_AF|gnomADe_REMAINING_AF|'
+            'gnomADe_SAS_AF|CLIN_SIG|SOMATIC|PHENO|CHECK_REF|MOTIF_NAME|MOTIF_POS|HIGH_INF_POS|'
+            'MOTIF_SCORE_CHANGE|TRANSCRIPTION_FACTORS|NearestExonJB|MaxEntScan_alt|MaxEntScan_diff|'
+            'MaxEntScan_ref'
         ),
     },
 
