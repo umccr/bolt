@@ -293,14 +293,13 @@ def transfer_annotations_somatic(input_fp, tumor_name, filter_name, pcgr_dir, ou
 
 def transfer_annotations_germline(input_fp, normal_name, cpsr_dir, output_dir):
     # Set destination INFO field names and source TSV fields
+    # Note: Only include fields that exist in CPSR v2.2.1 output
     info_field_map = {
-        constants.VcfInfo.CPSR_FINAL_CLASSIFICATION: 'FINAL_CLASSIFICATION',
-        constants.VcfInfo.CPSR_PATHOGENICITY_SCORE: 'CPSR_PATHOGENICITY_SCORE',
         constants.VcfInfo.CPSR_CLINVAR_CLASSIFICATION: 'CLINVAR_CLASSIFICATION',
         constants.VcfInfo.CPSR_CSQ: 'CSQ',
     }
 
-    cpsr_tsv_fp = pathlib.Path(cpsr_dir) / f'{normal_name}.cpsr.grch38.snv_indel_ann.tsv.gzv'
+    cpsr_tsv_fp = pathlib.Path(cpsr_dir) / f'{normal_name}.cpsr.grch38.classification.tsv.gz'
     cpsr_vcf_fp = pathlib.Path(cpsr_dir) / f'{normal_name}.cpsr.grch38.vcf.gz'
 
     # Enforce matching defined and source INFO annotations
@@ -312,8 +311,6 @@ def transfer_annotations_germline(input_fp, normal_name, cpsr_dir, output_dir):
     # Open filehandles, set required header entries
     input_fh = cyvcf2.VCF(input_fp)
 
-    util.add_vcf_header_entry(input_fh, constants.VcfInfo.CPSR_FINAL_CLASSIFICATION)
-    util.add_vcf_header_entry(input_fh, constants.VcfInfo.CPSR_PATHOGENICITY_SCORE)
     util.add_vcf_header_entry(input_fh, constants.VcfInfo.CPSR_CLINVAR_CLASSIFICATION)
     util.add_vcf_header_entry(input_fh, constants.VcfInfo.CPSR_CSQ)
 
@@ -353,7 +350,7 @@ def check_annotation_headers(info_field_map, vcf_fp):
 def collect_pcgr_annotation_data(tsv_fp, vcf_fp, info_field_map):
     # Gather all annotations from TSV
     data_tsv = dict()
-    with gzip.open(tsv_fp, 'rt') as tsv_fh:
+    with open(tsv_fp, 'r') as tsv_fh:
         for record in csv.DictReader(tsv_fh, delimiter='\t'):
             key, record_ann = get_annotation_entry_tsv(record, info_field_map)
             assert key not in data_tsv
@@ -376,7 +373,7 @@ def collect_cpsr_annotation_data(tsv_fp, vcf_fp, info_field_map):
     # Gather annotations from TSV
     data_tsv = dict()
     gdot_re = re.compile('^(?P<chrom>[\dXYM]+):g\.(?P<pos>\d+)(?P<ref>[A-Z]+)>(?P<alt>[A-Z]+)$')
-    with open(tsv_fp, 'r') as tsv_fh:
+    with gzip.open(tsv_fp, 'rt') as tsv_fh:
         for record in csv.DictReader(tsv_fh, delimiter='\t'):
             # Decompose CPSR 'GENOMIC_CHANGE' field into CHROM, POS, REF, and ALT
             re_result = gdot_re.match(record['GENOMIC_CHANGE'])
