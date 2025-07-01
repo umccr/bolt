@@ -278,6 +278,9 @@ def transfer_annotations_somatic(input_fp, tumor_name, pcgr_vcf_fp, pcgr_tsv_fp,
         constants.VcfInfo.PCGR_CSQ: 'CSQ',
     }
 
+    pcgr_tsv_fp = pathlib.Path(output_dir) / 'nosampleset.pcgr_acmg.grch38.snvs_indels.tiers.tsv'
+    pcgr_vcf_fp = pathlib.Path(output_dir) / 'nosampleset.pcgr_acmg.grch38.vcf.gz'
+
     # Enforce matching defined and source INFO annotations
     check_annotation_headers(info_field_map, pcgr_vcf_fp)
 
@@ -365,8 +368,7 @@ def check_annotation_headers(info_field_map, vcf_fp):
 def collect_pcgr_annotation_data(tsv_fp, vcf_fp, info_field_map):
     # Gather all annotations from TSV
     data_tsv = dict()
-    logger.info(f"Collecting PCGR annotations from {tsv_fp} and {vcf_fp}")
-    with gzip.open(tsv_fp, 'rt') as tsv_fh:
+    with open(tsv_fp, 'r') as tsv_fh:
         for record in csv.DictReader(tsv_fh, delimiter='\t'):
             key, record_ann = get_annotation_entry_tsv(record, info_field_map)
             assert key not in data_tsv
