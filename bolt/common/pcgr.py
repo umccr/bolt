@@ -203,8 +203,8 @@ def run_somatic(input_fp, pcgr_refdata_dir, vep_dir, output_dir, chunk_nbr=None,
 
     shutil.copytree(temp_dir.name, output_dir)
 
-    pcgr_tsv_fp = pathlib.Path(output_dir) / f'{sample_id}.pcgr_acmg.grch38.snvs_indels.tiers.tsv'
-    pcgr_vcf_fp = pathlib.Path(output_dir) / f'{sample_id}.pcgr_acmg.grch38.vcf.gz'
+    pcgr_tsv_fp = pathlib.Path(output_dir) / f'{sample_id}.pcgr.grch38.snv_indel_ann.tsv.gz'
+    pcgr_vcf_fp = pathlib.Path(output_dir) / f'{sample_id}.pcgr.grch38.pass.vcf.gz'
 
     # Check if both files exist
     if not pcgr_tsv_fp.exists(): 
@@ -282,9 +282,6 @@ def transfer_annotations_somatic(input_fp, tumor_name, pcgr_vcf_fp, pcgr_tsv_fp,
         constants.VcfInfo.PCGR_TCGA_PANCANCER_COUNT: 'TCGA_PANCANCER_COUNT',
         constants.VcfInfo.PCGR_CSQ: 'CSQ',
     }
-
-    pcgr_tsv_fp = pathlib.Path(output_dir) / 'nosampleset.pcgr_acmg.grch38.snvs_indels.tiers.tsv'
-    pcgr_vcf_fp = pathlib.Path(output_dir) / 'nosampleset.pcgr_acmg.grch38.vcf.gz'
 
     # Enforce matching defined and source INFO annotations
     check_annotation_headers(info_field_map, pcgr_vcf_fp)
@@ -584,11 +581,11 @@ def merging_pcgr_files(output_dir, pcgr_vcf_files, pcgr_tsv_fp):
     pcgr_dir.mkdir(exist_ok=True)
 
     # Merge all TSV files into a single file in the pcgr directory
-    merged_tsv_fp = pcgr_dir / "nosampleset.pcgr_acmg.grch38.snvs_indels.tiers.tsv"
+    merged_tsv_fp = pcgr_dir / "nosampleset.pcgr.grch38.snv_indel_ann.tsv.gz"
     util.merge_tsv_files(pcgr_tsv_fp, merged_tsv_fp)
 
     # Step 5: Merge all VCF files into a single file in the pcgr directory
-    merged_vcf_path = pcgr_dir / "nosampleset.pcgr_acmg.grch38"
+    merged_vcf_path = pcgr_dir / "nosampleset.pcgr.grch38.pass"
     merged_vcf = util.merge_vcf_files(pcgr_vcf_files, merged_vcf_path)
 
     return merged_vcf, merged_tsv_fp
