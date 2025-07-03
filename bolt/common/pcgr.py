@@ -268,6 +268,7 @@ def transfer_annotations_somatic(input_fp, tumor_name, filter_name, pcgr_dir, ou
     # Open filehandles, set required header entries
     input_fh = cyvcf2.VCF(input_fp)
 
+    util.add_vcf_header_entry(input_fh, constants.VcfInfo.PCGR_ACTIONABILITY_TIER)
     util.add_vcf_header_entry(input_fh, constants.VcfInfo.PCGR_CSQ)
     util.add_vcf_header_entry(input_fh, constants.VcfInfo.PCGR_MUTATION_HOTSPOT)
     util.add_vcf_header_entry(input_fh, constants.VcfInfo.PCGR_CLINVAR_CLASSIFICATION)
@@ -353,6 +354,11 @@ def collect_pcgr_annotation_data(tsv_fp, vcf_fp, info_field_map):
         for record in csv.DictReader(tsv_fh, delimiter='\t'):
             key, record_ann = get_annotation_entry_tsv(record, info_field_map)
             assert key not in data_tsv
+
+
+            # Process PCGR_ACTIONABILITY_TIER
+            # TIER 1, TIER 2, TIER 3, TIER 4, NONCODING
+            record_ann[constants.VcfInfo.PCGR_ACTIONABILITY_TIER] = record['ACTIONABILITY_TIER']
 
             # Store annotation data
             data_tsv[key] = record_ann
