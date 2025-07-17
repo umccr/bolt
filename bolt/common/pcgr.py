@@ -370,6 +370,7 @@ def check_annotation_headers(info_field_map, vcf_fp):
 def collect_pcgr_annotation_data(tsv_fp, vcf_fp, info_field_map):
     # Gather all annotations from TSV
     data_tsv = dict()
+    logger.info(f"Collecting PCGR annotations from {tsv_fp} and {vcf_fp}")
     with gzip.open(tsv_fp, 'rt') as tsv_fh:
         for record in csv.DictReader(tsv_fh, delimiter='\t'):
             key, record_ann = get_annotation_entry_tsv(record, info_field_map)
@@ -589,7 +590,7 @@ def merging_pcgr_files(output_dir, pcgr_vcf_files, pcgr_tsv_fp):
     util.merge_tsv_files(pcgr_tsv_fp, merged_tsv_fp)
 
     # Step 5: Merge all VCF files into a single file in the pcgr directory
-    merged_vcf_path = pcgr_dir / "nosampleset.pcgr.grch38.pass"
+    merged_vcf_path = pcgr_dir / "nosampleset.pcgr.grch38.pass.vcf.gz"
     merged_vcf = util.merge_vcf_files(pcgr_vcf_files, merged_vcf_path)
 
     return merged_vcf, merged_tsv_fp

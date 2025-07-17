@@ -1,3 +1,4 @@
+import gzip
 import pathlib
 import subprocess
 import textwrap
@@ -115,9 +116,10 @@ def merge_tsv_files(tsv_files, merged_tsv_fp):
     """
     Merges all TSV files into a single TSV.
     """
-    with open(merged_tsv_fp, 'w') as merged_tsv:
+    logger.info("Merging TSV files...")
+    with gzip.open(merged_tsv_fp, 'wt') as merged_tsv:
         for i, tsv_file in enumerate(tsv_files):
-            with open(tsv_file, 'r') as infile:
+            with gzip.open(tsv_file, 'rt') as infile:
                 for line_number, line in enumerate(infile):
                     # Skip header except for the first file
                     if i > 0 and line_number == 0:
@@ -137,6 +139,7 @@ def merge_vcf_files(vcf_files, merged_vcf_fp):
     Returns:
     - Path to the sorted merged VCF file.
     """
+    logger.info("Merging VCF files...")
     merged_vcf_fp = pathlib.Path(merged_vcf_fp)
     merged_unsorted_vcf = merged_vcf_fp.with_suffix('.unsorted.vcf.gz')
     merged_vcf = merged_vcf_fp.with_suffix('.vcf.gz')
