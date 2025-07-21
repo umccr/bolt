@@ -207,7 +207,7 @@ def run_somatic(input_fp, pcgr_refdata_dir, vep_dir, output_dir, chunk_nbr=None,
     pcgr_vcf_fp = pathlib.Path(output_dir) / f'{sample_id}.pcgr.grch38.pass.vcf.gz'
 
     # Check if both files exist
-    if not pcgr_tsv_fp.exists(): 
+    if not pcgr_tsv_fp.exists():
         raise FileNotFoundError(f"Expected file {pcgr_tsv_fp} not found.")
     if not pcgr_vcf_fp.exists():
         raise FileNotFoundError(f"Expected file {pcgr_vcf_fp} not found.")
@@ -307,7 +307,7 @@ def transfer_annotations_somatic(input_fp, tumor_name, pcgr_vcf_fp, pcgr_tsv_fp,
         if record.CHROM == 'chrM':
             continue
         # Annotate and write
-        record_ann = annotate_record(record, pcgr_data)
+        record_ann = annotate_record(record, pcgr_data, allow_missing=True)
         output_fh.write_record(record_ann)
 
 
@@ -523,7 +523,6 @@ def split_vcf(input_vcf, output_dir):
     chunk_number = 1
     variant_count = 0
     base_filename = pathlib.Path(input_vcf).stem
-    chunk_filename = output_dir / f"{base_filename}_chunk{chunk_number}.vcf"
     base_filename = input_vcf.stem
     chunk_filename = output_dir / f"{base_filename}_chunk{chunk_number}.vcf"
     chunk_files.append(chunk_filename)
