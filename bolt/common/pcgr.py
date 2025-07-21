@@ -183,9 +183,18 @@ def run_somatic(input_fp, pcgr_refdata_dir, vep_dir, output_dir, chunk_nbr=None,
 
     util.execute_command(command)
 
-    shutil.copytree(temp_dir.name, pcgr_output_dir)
+    shutil.copytree(temp_dir.name, output_dir)
 
-    return pcgr_output_dir
+    pcgr_tsv_fp = pathlib.Path(output_dir) / f'{sample_id}.pcgr.grch38.snv_indel_ann.tsv.gz'
+    pcgr_vcf_fp = pathlib.Path(output_dir) / f'{sample_id}.pcgr.grch38.pass.vcf.gz'
+
+    # Check if both files exist
+    if not pcgr_tsv_fp.exists():
+        raise FileNotFoundError(f"Expected file {pcgr_tsv_fp} not found.")
+    if not pcgr_vcf_fp.exists():
+        raise FileNotFoundError(f"Expected file {pcgr_vcf_fp} not found.")
+
+    return pcgr_tsv_fp, pcgr_vcf_fp
 
 
 def run_germline(input_fp, panel_fp, pcgr_refdata_dir, vep_dir, output_dir, threads=1, pcgr_conda=None, pcgrr_conda=None, sample_id=None):
@@ -287,7 +296,7 @@ def transfer_annotations_somatic(input_fp, tumor_name, filter_name, pcgr_dir, ou
             output_fh.write_record(record)
             continue
         # Annotate and write
-        record_ann = annotate_record(record, pcgr_data)
+        record_ann = annotate_record(record, pcgr_data, allow_missing=True)
         output_fh.write_record(record_ann)
 
 
@@ -502,7 +511,6 @@ def split_vcf(input_vcf, output_dir):
     chunk_number = 1
     variant_count = 0
     base_filename = pathlib.Path(input_vcf).stem
-    chunk_filename = output_dir / f"{base_filename}_chunk{chunk_number}.vcf"
     base_filename = input_vcf.stem
     chunk_filename = output_dir / f"{base_filename}_chunk{chunk_number}.vcf"
     chunk_files.append(chunk_filename)
