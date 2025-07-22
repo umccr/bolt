@@ -113,11 +113,13 @@ def get_minimal_header(input_fh):
 
 def run_somatic(input_fp, pcgr_refdata_dir, vep_dir, output_dir, chunk_nbr=None, threads=1, pcgr_conda=None, pcgrr_conda=None, purity=None, ploidy=None, sample_id=None):
 
-    # NOTE(SW): Nextflow FusionFS v2.2.8 does not support PCGR output to S3; instead write to a
-    # temporary directory outside of the FusionFS mounted directory then manually copy across
 
-    temp_dir = tempfile.TemporaryDirectory()
-    pcgr_output_dir = output_dir / 'pcgr/'
+    output_dir = output_dir / f"pcgr_{chunk_nbr}" if chunk_nbr is not None else output_dir
+
+    if output_dir.exists():
+        logger.warning(f"Output directory '{output_dir}' already exists and will be overwritten")
+        shutil.rmtree(output_dir)
+
 
     if not sample_id:
         sample_id = 'nosampleset'
@@ -164,7 +166,7 @@ def run_somatic(input_fp, pcgr_refdata_dir, vep_dir, output_dir, chunk_nbr=None,
         command_args.append(f'--tumor_ploidy {ploidy}')
 
     # NOTE(SW): placed here to always have output directory last
-    command_args.append(f'--output_dir {temp_dir.name}')
+    command_args.append(f'--output_dir {output_dir}')
 
     delimiter_padding = ' ' * 10
     delimiter = f' \\\n{delimiter_padding}'
@@ -181,9 +183,11 @@ def run_somatic(input_fp, pcgr_refdata_dir, vep_dir, output_dir, chunk_nbr=None,
         command_formatting = '\n' + ' ' * 4
         command = command_formatting + command_conda + command
 
-    util.execute_command(command)
+    # Log file path
+    log_file_path = output_dir / "run_somatic.log"
 
-    shutil.copytree(temp_dir.name, output_dir)
+    # Run the command and redirect output to the log file
+    util.execute_command(command, log_file_path=log_file_path)
 
     pcgr_tsv_fp = pathlib.Path(output_dir) / f'{sample_id}.pcgr.grch38.snv_indel_ann.tsv.gz'
     pcgr_vcf_fp = pathlib.Path(output_dir) / f'{sample_id}.pcgr.grch38.pass.vcf.gz'
@@ -202,10 +206,7 @@ def run_germline(input_fp, panel_fp, pcgr_refdata_dir, vep_dir, output_dir, thre
     if not sample_id:
         sample_id = 'nosampleset'
 
-    # NOTE(SW): Nextflow FusionFS v2.2.8 does not support PCGR output to S3; instead write to a
-    # temporary directory outside of the FusionFS mounted directory then manually copy across
 
-    temp_dir = tempfile.TemporaryDirectory()
     cpsr_output_dir = output_dir / 'cpsr/'
 
     if cpsr_output_dir.exists():
@@ -232,7 +233,7 @@ def run_germline(input_fp, panel_fp, pcgr_refdata_dir, vep_dir, output_dir, thre
         command_args.append(f'--pcgrr_conda {pcgrr_conda}')
 
     # NOTE(SW): placed here to always have output directory last
-    command_args.append(f'--output_dir {temp_dir.name}')
+    command_args.append(f'--output_dir {cpsr_output_dir}')
 
     delimiter_padding = ' ' * 10
     delimiter = f' \\\n{delimiter_padding}'
@@ -250,8 +251,6 @@ def run_germline(input_fp, panel_fp, pcgr_refdata_dir, vep_dir, output_dir, thre
         command = command_formatting + command_conda + command
 
     util.execute_command(command)
-
-    shutil.copytree(temp_dir.name, cpsr_output_dir)
 
     return cpsr_output_dir
 
