@@ -120,6 +120,8 @@ def run_somatic(input_fp, pcgr_refdata_dir, vep_dir, output_dir, chunk_nbr=None,
         logger.warning(f"Output directory '{output_dir}' already exists and will be overwritten")
         shutil.rmtree(output_dir)
 
+    # Create output directory
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     if not sample_id:
         sample_id = 'nosampleset'
@@ -212,6 +214,9 @@ def run_germline(input_fp, panel_fp, pcgr_refdata_dir, vep_dir, output_dir, thre
     if cpsr_output_dir.exists():
         logger.warning(f"Output directory '{cpsr_output_dir}' already exists and will be overwritten")
         shutil.rmtree(cpsr_output_dir)
+
+    # Create output directory
+    cpsr_output_dir.mkdir(parents=True, exist_ok=True)
 
     command_args = [
         f'--sample_id {sample_id}',
