@@ -150,7 +150,7 @@ def run_somatic(input_fp, pcgr_refdata_dir, vep_dir, output_dir, chunk_nbr=None,
         f'--estimate_tmb',
         #f'--show_noncoding',
         f'--vcfanno_n_proc {threads}',
-        f'--vep_n_forks {threads}',
+        f'--vep_n_forks 4',
         f'--vep_pick_order biotype,rank,appris,tsl,ccds,canonical,length,mane_plus_clinical,mane_select',
     ]
 
