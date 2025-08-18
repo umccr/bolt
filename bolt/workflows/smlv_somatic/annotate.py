@@ -108,7 +108,7 @@ def entry(ctx, **kwargs):
     total_variants = util.count_vcf_records(pcgr_prep_fp)
     print(f"Total number of variants in the input VCF: {total_variants}")
 
-    if total_variants > 15000:
+    if total_variants >  constants.MAX_SOMATIC_VARIANTS:
         vcf_chunks = util.split_vcf(
             pcgr_prep_fp,
             output_dir
