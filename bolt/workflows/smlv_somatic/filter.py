@@ -37,7 +37,7 @@ def entry(ctx, **kwargs):
         constants.VcfFilter.ENCODE,
         constants.VcfFilter.GNOMAD_COMMON,
         constants.VcfInfo.SAGE_HOTSPOT_RESCUE,
-        constants.VcfInfo.PCGR_TIER_RESCUE,
+        constants.VcfInfo.PCGR_ACTIONABILITY_TIER_RESCUE,
         constants.VcfInfo.CLINICAL_POTENTIAL_RESCUE,
         constants.VcfInfo.RESCUED_FILTERS_EXISTING,
         constants.VcfInfo.RESCUED_FILTERS_PENDING,
@@ -162,9 +162,9 @@ def set_filter_data(record, tumor_index):
     ##
     # PCGR tier rescue
     ##
-    pcgr_tier = record.INFO.get(constants.VcfInfo.PCGR_TIER.value)
-    if pcgr_tier in constants.PCGR_TIERS_RESCUE:
-        info_rescue.append(constants.VcfInfo.PCGR_TIER_RESCUE)
+    pcgr_tier = record.INFO.get(constants.VcfInfo.PCGR_ACTIONABILITY_TIER.value)
+    if pcgr_tier in constants.PCGR_ACTIONABILITY_TIER_RESCUE:
+        info_rescue.append(constants.VcfInfo.PCGR_ACTIONABILITY_TIER_RESCUE)
 
     ##
     # SAGE hotspot rescue
@@ -181,19 +181,15 @@ def set_filter_data(record, tumor_index):
     # single CLINICAL_POTENTIAL_RESCUE flag
 
     # Get ClinVar clinical significance entries
-    clinvar_clinsig = record.INFO.get(constants.VcfInfo.PCGR_CLINVAR_CLNSIG.value, '')
+    clinvar_clinsig = record.INFO.get(constants.VcfInfo.PCGR_CLINVAR_CLASSIFICATION.value, '')
     clinvar_clinsigs = clinvar_clinsig.split(',')
     # Hit counts in relevant reference somatic mutation databases
-    cosmic_count = record.INFO.get(constants.VcfInfo.PCGR_COSMIC_COUNT.value, 0)
     tcga_pancancer_count = record.INFO.get(constants.VcfInfo.PCGR_TCGA_PANCANCER_COUNT.value, 0)
-    icgc_pcawg_count = record.INFO.get(constants.VcfInfo.PCGR_ICGC_PCAWG_COUNT.value, 0)
     if (
         record.INFO.get(constants.VcfInfo.HMF_HOTSPOT.value) is not None or
         record.INFO.get(constants.VcfInfo.PCGR_MUTATION_HOTSPOT.value) is not None or
         any(e in clinvar_clinsigs for e in constants.CLINVAR_CLINSIGS_RESCUE) or
-        cosmic_count >= constants.MIN_COSMIC_COUNT_RESCUE or
-        tcga_pancancer_count >= constants.MIN_TCGA_PANCANCER_COUNT_RESCUE or
-        icgc_pcawg_count >= constants.MIN_ICGC_PCAWG_COUNT_RESCUE
+        tcga_pancancer_count >= constants.MIN_TCGA_PANCANCER_COUNT_RESCUE
     ):
         info_rescue.append(constants.VcfInfo.CLINICAL_POTENTIAL_RESCUE)
 

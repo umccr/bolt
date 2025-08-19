@@ -23,6 +23,7 @@ from ...common import pcgr
 @click.option('--pon_dir', required=True, type=click.Path(exists=True))
 
 @click.option('--pcgr_data_dir', required=True, type=click.Path(exists=True))
+@click.option('--vep_dir', required=True, type=click.Path(exists=True))
 
 @click.option('--pcgr_conda', required=False, type=str)
 @click.option('--pcgrr_conda', required=False, type=str)
@@ -80,10 +81,8 @@ def entry(ctx, **kwargs):
     #       - PCGR ACMG TIER [INFO/PCGR_TIER]
     #       - VEP consequence [INFO/PCR_CSQ]
     #       - Known mutation hotspot [INFO/PCGR_MUTATION_HOTSPOT]
-    #       - ClinVar clinical significant [INFO/PCGR_CLINVAR_CLNSIG]
-    #       - Hits in COSMIC [INFO/PCGR_COSMIC_COUNT]
+    #       - ClinVar clinical significant [INFO/PCGR_CLNSIG]
     #       - Hits in TCGA [INFO/PCGR_TCGA_PANCANCER_COUNT]
-    #       - Hits in PCAWG [INFO/PCGR_ICGC_PCAWG_COUNT]
     # Set selected data or full input
     selection_data = select_variants(
         pon_fp,
@@ -107,7 +106,20 @@ def entry(ctx, **kwargs):
     pcgr_dir = pcgr.run_somatic(
         pcgr_prep_fp,
         kwargs['pcgr_data_dir'],
+        kwargs['vep_dir'],
         output_dir,
+        pcgr_output_dir,
+        kwargs['threads'],
+        kwargs['pcgr_conda'],
+        kwargs['pcgrr_conda']
+    )
+    else:
+        pcgr_tsv_fp, pcgr_vcf_fp = pcgr.run_somatic(
+        pcgr_prep_fp,
+        kwargs['pcgr_data_dir'],
+        kwargs['vep_dir'],
+        pcgr_output_dir,
+        chunk_nbr=None,
         threads=kwargs['threads'],
         pcgr_conda=kwargs['pcgr_conda'],
         pcgrr_conda=kwargs['pcgrr_conda'],

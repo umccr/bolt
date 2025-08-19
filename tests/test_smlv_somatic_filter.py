@@ -160,15 +160,15 @@ class TestSmlvSomaticFilter(unittest.TestCase):
 
     def test_pcgr_tier_rescue(self):
         pcgr_tiers = [
-            'TIER_1',
-            'TIER_2',
+            '1',
+            '2',
         ]
-        rescue_tag_str = bolt_constants.VcfInfo.PCGR_TIER_RESCUE.value
+        rescue_tag_str = bolt_constants.VcfInfo.PCGR_ACTIONABILITY_TIER_RESCUE.value
 
         for pcgr_tier in pcgr_tiers:
             record = get_record(
                 **self.records['filter_min_af9.9'],
-                info_data={'PCGR_TIER': pcgr_tier},
+                info_data={'PCGR_ACTIONABILITY_TIER': pcgr_tier},
             )
             smlv_somatic_filter.set_filter_data(record, 0)
             assert not record.FILTER
@@ -217,7 +217,7 @@ class TestSmlvSomaticFilter(unittest.TestCase):
         for clinsig in clinsigs:
             record = get_record(
                 **self.records['filter_min_af9.9'],
-                info_data={'PCGR_CLINVAR_CLNSIG': clinsig},
+                info_data={'PCGR_CLINVAR_CLASSIFICATION': clinsig},
             )
             smlv_somatic_filter.set_filter_data(record, 0)
             assert not record.FILTER
