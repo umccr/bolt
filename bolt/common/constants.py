@@ -41,6 +41,43 @@ PCGR_TIERS_RESCUE = {
 }
 
 
+################################
+## Hypermutated report filter ##
+################################
+PCGR_TIERS_FILTERING = (
+    'TIER_1',
+    'TIER_2',
+    'TIER_3',
+    'TIER_4',
+    'NONCODING',
+)
+
+VEP_IMPACTS_FILTER = (
+    'intergenic',
+    'intronic',
+    'downstream',
+    'upstream',
+    'impacts_other',
+)
+
+GENOMIC_REGIONS_FILTERING = (
+    'difficult',
+    'none',
+    'giab_conf',
+)
+
+HOTSPOT_FIELDS_FILTERING = (
+    'SAGE_HOTSPOT',
+    'hotspot',
+    'PCGR_MUTATION_HOTSPOT',
+)
+
+RETAIN_FIELDS_FILTERING = (
+    'PANEL',
+    *HOTSPOT_FIELDS_FILTERING,
+)
+
+
 ##################################################
 ## VCF FILTER tags and FORMAT, INFO annotations ##
 ##################################################
@@ -60,6 +97,8 @@ class VcfFilter(enum.Enum):
     PON = 'PON'
     ENCODE = 'ENCODE'
     GNOMAD_COMMON = 'gnomAD_common'
+
+    PCGR_COUNT_LIMIT = 'PCGR_count_limit'
 
     @property
     def namespace(self):
@@ -120,6 +159,8 @@ class VcfInfo(enum.Enum):
 
     RESCUED_FILTERS_EXISTING = 'RESCUED_FILTERS_EXISTING'
     RESCUED_FILTERS_PENDING = 'RESCUED_FILTERS_PENDING'
+
+    PANEL = 'PANEL'
 
     @property
     def namespace(self):
@@ -187,6 +228,9 @@ VCF_HEADER_ENTRIES = {
         'Description': f'gnomAD AF >= {MAX_GNOMAD_AF}',
     },
 
+    VcfFilter.PCGR_COUNT_LIMIT: {
+        'Description': 'Manually filtered to meet PCGR 500,000 variant limit',
+    },
 
     # INFO
     VcfInfo.TUMOR_AF: {
@@ -348,6 +392,12 @@ VCF_HEADER_ENTRIES = {
         'Number': '1',
         'Type': 'String',
         'Description': 'Filters pending prior to variant rescue',
+    },
+
+    VcfInfo.PANEL: {
+        'Number': '0',
+        'Type': 'Flag',
+        'Description': 'UMCCR somatic panel CDS (2,000 bp padding)',
     },
 
 

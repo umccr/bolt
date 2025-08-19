@@ -17,6 +17,7 @@ dependencies = [
     "cyvcf2",
     "pysam",
     "pyyaml",
+    "future"
 ]
 
 [project.scripts]
