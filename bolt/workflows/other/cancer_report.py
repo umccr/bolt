@@ -28,6 +28,10 @@ from ... import util
 
 @click.option('--purple_dir', required=True, type=click.Path(exists=True))
 @click.option('--virusbreakend_dir', required=True, type=click.Path(exists=True))
+@click.option('--mutpat_dir', required=True, type=click.Path(exists=True))
+
+@click.option('--hrdetect_file', required=True, type=click.Path(exists=True))
+@click.option('--chord_file', required=True, type=click.Path(exists=True))
 
 @click.option('--dragen_hrd_fp', required=True, type=click.Path(exists=True))
 
@@ -93,6 +97,10 @@ def entry(ctx, **kwargs):
             \
             --key_genes {kwargs['cancer_genes_fp']} \
             --oncokb_genes {kwargs['oncokb_genes_fp']} \
+            \
+            --mutpat_dir {kwargs['mutpat_dir']} \
+            --hrdetect_file {kwargs['hrdetect_file']} \
+            --chord_file {kwargs['chord_file']} \
             \
             --img_dir {output_image_dir}/ \
             --result_outdir {output_table_dir}/ \
