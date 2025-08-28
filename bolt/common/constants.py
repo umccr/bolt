@@ -241,7 +241,7 @@ VCF_HEADER_ENTRIES = {
         ),
     },
     VcfInfo.PCGR_CSQ: {
-    'Number': '.',
+        'Number': '.',
     'Type': 'String',
     'Description': (
         'Consequence annotations from Ensembl VEP. Format: '
