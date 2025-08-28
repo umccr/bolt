@@ -1,13 +1,12 @@
 import collections
 import csv
 import functools
+import gzip
 import itertools
 import pathlib
 import re
 import shutil
 import tempfile
-import gzip  # added import
-
 
 import cyvcf2
 
