@@ -4,7 +4,7 @@ import enum
 ######################################
 ## Variation selection (annotation) ##
 ######################################
-MAX_SOMATIC_VARIANTS = 500_000
+MAX_SOMATIC_VARIANTS = 450_000
 MAX_SOMATIC_VARIANTS_GNOMAD_FILTER = 0.01
 
 
