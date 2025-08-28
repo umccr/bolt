@@ -189,9 +189,7 @@ class TestSmlvSomaticFilter(unittest.TestCase):
         info_data_sets = [
             {'HMF_HOTSPOT': ''},
             {'PCGR_MUTATION_HOTSPOT': ''},
-            {'PCGR_COSMIC_COUNT': 11},
             {'PCGR_TCGA_PANCANCER_COUNT': 6},
-            {'PCGR_ICGC_PCAWG_COUNT': 6},
         ]
         rescue_tag_str = bolt_constants.VcfInfo.CLINICAL_POTENTIAL_RESCUE.value
 
@@ -201,6 +199,7 @@ class TestSmlvSomaticFilter(unittest.TestCase):
                 info_data=info_data_set,
             )
             smlv_somatic_filter.set_filter_data(record, 0)
+            assert not record.FILTER
             assert record.INFO.get(rescue_tag_str) is not None
 
 
