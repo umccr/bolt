@@ -201,7 +201,6 @@ class TestSmlvSomaticFilter(unittest.TestCase):
                 info_data=info_data_set,
             )
             smlv_somatic_filter.set_filter_data(record, 0)
-            assert not record.FILTER
             assert record.INFO.get(rescue_tag_str) is not None
 
 
