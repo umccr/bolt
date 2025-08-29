@@ -7,6 +7,7 @@ import pathlib
 import re
 import shutil
 import tempfile
+import logging
 
 import cyvcf2
 
@@ -14,6 +15,8 @@ import cyvcf2
 from .. import util
 from ..common import constants
 
+# Use the existing logger configuration
+logger = logging.getLogger(__name__)
 
 def prepare_vcf_somatic(input_fp, tumor_name, normal_name, output_dir):
 
@@ -179,7 +182,7 @@ def run_somatic(input_fp, pcgr_refdata_dir, vep_dir, output_dir, chunk_nbr=None,
 
     command = fr'''
         pcgr \
-          {command_args_str}
+            {command_args_str}
     '''
 
     if pcgr_conda:
@@ -262,7 +265,7 @@ def run_germline(input_fp, panel_fp, pcgr_refdata_dir, vep_dir, output_dir, thre
     return cpsr_output_dir
 
 
-def transfer_annotations_somatic(input_fp, tumor_name, filter_name, pcgr_dir, output_dir):
+def transfer_annotations_somatic(input_fp, tumor_name, pcgr_vcf_fp, pcgr_tsv_fp, output_dir):
     # Set destination INFO field names and source TSV fields
     info_field_map = {
         constants.VcfInfo.PCGR_MUTATION_HOTSPOT: 'MUTATION_HOTSPOT',
@@ -296,10 +299,6 @@ def transfer_annotations_somatic(input_fp, tumor_name, filter_name, pcgr_dir, ou
     for record in input_fh:
         # Do not process chrM since *snvs_indels.tiers.tsv does not include these annotations
         if record.CHROM == 'chrM':
-            continue
-        # Immediately print out variants that were not annotated
-        if filter_name in record.FILTERS:
-            output_fh.write_record(record)
             continue
         # Annotate and write
         record_ann = annotate_record(record, pcgr_data, allow_missing=True)
