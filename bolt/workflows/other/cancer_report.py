@@ -5,6 +5,9 @@ import click
 
 
 from ... import util
+from ...logging_config import setup_logging
+
+
 
 
 @click.command(name='cancer_report')
@@ -47,6 +50,9 @@ def entry(ctx, **kwargs):
     # Create output directory
     output_dir = pathlib.Path(kwargs['output_dir'])
     output_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
+
+    script_name = pathlib.Path(__file__).stem
+    setup_logging(output_dir, script_name)
 
     # Normalise SAGE variants and remove duplicates that arise for MutationalPattern compatibility
     decomposed_snv_vcf = normalise_and_dedup_sage_variants(

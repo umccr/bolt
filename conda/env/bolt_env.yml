@@ -16,3 +16,4 @@ dependencies:
   - python >=3.10
   - pyyaml
   - vcfanno ==0.3.5
+  - ncurses>=6.3
