@@ -5,9 +5,12 @@ import pathlib
 import click
 import cyvcf2
 import pysam
+import logging
 
 
 from ... import util
+
+logger = logging.getLogger(__name__)
 
 
 @click.command(name='annotate')
