@@ -28,6 +28,7 @@ from ...common import pcgr
 @click.option('--pcgrr_conda', required=False, type=str)
 
 @click.option('--pcgr_data_dir', required=False, type=str)
+@click.option('--vep_dir', required=True, type=click.Path(exists=True))
 @click.option('--purple_purity_fp', required=True, type=click.Path(exists=True))
 
 @click.option('--cancer_genes_fp', required=True, type=click.Path(exists=True))
@@ -131,7 +132,8 @@ def entry(ctx, **kwargs):
     pcgr.run_somatic(
         pcgr_prep_fp,
         kwargs['pcgr_data_dir'],
-        output_dir,
+        kwargs['vep_dir'],
+        pcgr_output_dir,
         threads=kwargs['threads'],
         pcgr_conda=kwargs['pcgr_conda'],
         pcgrr_conda=kwargs['pcgrr_conda'],

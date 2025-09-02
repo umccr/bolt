@@ -15,13 +15,13 @@ RUN \
   conda create \
     --solver libmamba \
     --name pcgr \
-    --file https://raw.githubusercontent.com/sigven/pcgr/v1.4.1/conda/env/lock/pcgr-linux-64.lock
+    --file https://raw.githubusercontent.com/sigven/pcgr/refs/tags/v2.2.1/conda/env/lock/pcgr-linux-64.lock
 
 RUN \
   conda create \
     --solver libmamba \
     --name pcgrr \
-    --file https://raw.githubusercontent.com/sigven/pcgr/v1.4.1/conda/env/lock/pcgrr-linux-64.lock
+    --file https://raw.githubusercontent.com/sigven/pcgr/refs/tags/v2.2.1/conda/env/lock/pcgrr-linux-64.lock
 
 COPY ./conda/env/bolt_env.yml /tmp/
 RUN \

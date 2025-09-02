@@ -1,6 +1,7 @@
 import collections
 import csv
 import functools
+import gzip
 import itertools
 import pathlib
 import re
@@ -115,18 +116,17 @@ def get_minimal_header(input_fh):
     return '\n'.join([filetype_line, *chrom_lines, *format_lines, column_line])
 
 
-def run_somatic(input_fp, pcgr_refdata_dir, pcgr_pcgr_output_dir, chunk_nbr=None, chunk_nbr=None, threads=1, pcgr_conda=None, pcgrr_conda=None, purity=None, ploidy=None, sample_id=None):
+def run_somatic(input_fp, pcgr_refdata_dir, vep_dir, output_dir, chunk_nbr=None, threads=1, pcgr_conda=None, pcgrr_conda=None, purity=None, ploidy=None, sample_id=None):
 
-    # NOTE(SW): Nextflow FusionFS v2.2.8 does not support PCGR output to S3; instead write to a
-    # temporary directory outside of the FusionFS mounted directory then manually copy across
 
-    temp_dir = tempfile.TemporaryDirectory()
-    temp_dir_path = pathlib.Path(temp_dir.name)
-    pcgr_output_dir = pcgr_output_dir / f"pcgr_{chunk_nbr}" if chunk_nbr is not None else pcgr_output_dir # Check if the output directory already exists
-    if pcgr_output_dir.exists():
-        logger.warning(f"Warning: Output directory '{pcgr_output_dir}' already exists and will be overwrited")
-        shutil.rmtree(pcgr_output_dir)
+    output_dir = output_dir / f"pcgr_{chunk_nbr}" if chunk_nbr is not None else output_dir
 
+    if output_dir.exists():
+        logger.warning(f"Output directory '{output_dir}' already exists and will be overwritten")
+        shutil.rmtree(output_dir)
+
+    # Create output directory
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     if not sample_id:
         sample_id = 'nosampleset'
@@ -134,19 +134,20 @@ def run_somatic(input_fp, pcgr_refdata_dir, pcgr_pcgr_output_dir, chunk_nbr=None
     command_args = [
         f'--sample_id {sample_id}',
         f'--input_vcf {input_fp}',
+        f'--vep_dir {vep_dir}',
+        f'--refdata_dir {pcgr_refdata_dir}',
         f'--tumor_dp_tag TUMOR_DP',
         f'--tumor_af_tag TUMOR_AF',
         f'--control_dp_tag NORMAL_DP',
         f'--control_af_tag NORMAL_AF',
-        f'--pcgr_dir {pcgr_refdata_dir}',
         f'--genome_assembly grch38',
         f'--assay WGS',
         f'--estimate_signatures',
-        f'--estimate_msi_status',
+        f'--estimate_msi',
         f'--estimate_tmb',
-        f'--show_noncoding',
         f'--vcfanno_n_proc {threads}',
-        f'--vep_pick_order biotype,rank,appris,tsl,ccds,canonical,length,mane',
+        f'--vep_n_forks 4',
+        f'--vep_pick_order biotype,rank,appris,tsl,ccds,canonical,length,mane_plus_clinical,mane_select',
     ]
 
     # NOTE(SW): VEP pick order is applied as a successive filter:
@@ -172,7 +173,7 @@ def run_somatic(input_fp, pcgr_refdata_dir, pcgr_pcgr_output_dir, chunk_nbr=None
         command_args.append(f'--tumor_ploidy {ploidy}')
 
     # NOTE(SW): placed here to always have output directory last
-    command_args.append(f'--output_dir {temp_dir.name}')
+    command_args.append(f'--output_dir {output_dir}')
 
     delimiter_padding = ' ' * 10
     delimiter = f' \\\n{delimiter_padding}'
@@ -190,18 +191,16 @@ def run_somatic(input_fp, pcgr_refdata_dir, pcgr_pcgr_output_dir, chunk_nbr=None
         command = command_formatting + command_conda + command
 
     # Log file path
-    log_file_path = temp_dir_path / "run_somatic.log"
+    log_file_path = output_dir / "run_somatic.log"
 
     # Run the command and redirect output to the log file
     util.execute_command(command, log_file_path=log_file_path)
 
-    shutil.copytree(temp_dir.name, pcgr_output_dir)
-
-    pcgr_tsv_fp = pathlib.Path(pcgr_output_dir) / 'nosampleset.pcgr_acmg.grch38.snvs_indels.tiers.tsv'
-    pcgr_vcf_fp = pathlib.Path(pcgr_output_dir) / 'nosampleset.pcgr_acmg.grch38.vcf.gz'
+    pcgr_tsv_fp = pathlib.Path(output_dir) / f'{sample_id}.pcgr.grch38.snv_indel_ann.tsv.gz'
+    pcgr_vcf_fp = pathlib.Path(output_dir) / f'{sample_id}.pcgr.grch38.pass.vcf.gz'
 
     # Check if both files exist
-    if not pcgr_tsv_fp.exists(): 
+    if not pcgr_tsv_fp.exists():
         raise FileNotFoundError(f"Expected file {pcgr_tsv_fp} not found.")
     if not pcgr_vcf_fp.exists():
         raise FileNotFoundError(f"Expected file {pcgr_vcf_fp} not found.")
@@ -209,37 +208,42 @@ def run_somatic(input_fp, pcgr_refdata_dir, pcgr_pcgr_output_dir, chunk_nbr=None
     return pcgr_tsv_fp, pcgr_vcf_fp
 
 
-def run_germline(input_fp, panel_fp, pcgr_refdata_dir, output_dir, threads=1, pcgr_conda=None, pcgrr_conda=None, sample_id=None):
+def run_germline(input_fp, panel_fp, pcgr_refdata_dir, vep_dir, output_dir, threads=1, pcgr_conda=None, pcgrr_conda=None, sample_id=None):
 
     if not sample_id:
         sample_id = 'nosampleset'
 
-    # NOTE(SW): Nextflow FusionFS v2.2.8 does not support PCGR output to S3; instead write to a
-    # temporary directory outside of the FusionFS mounted directory then manually copy across
 
-    temp_dir = tempfile.TemporaryDirectory()
     cpsr_output_dir = output_dir / 'cpsr/'
+
+    if cpsr_output_dir.exists():
+        logger.warning(f"Output directory '{cpsr_output_dir}' already exists and will be overwritten")
+        shutil.rmtree(cpsr_output_dir)
+
+    # Create output directory
+    cpsr_output_dir.mkdir(parents=True, exist_ok=True)
 
     command_args = [
         f'--sample_id {sample_id}',
         f'--input_vcf {input_fp}',
         f'--genome_assembly grch38',
         f'--custom_list {panel_fp}',
+        f'--vep_dir {pcgr_refdata_dir}',
+        f'--refdata_dir {pcgr_refdata_dir}',
         # NOTE(SW): probably useful to add versioning information here; weigh against maintainence
         # burden
         f'--custom_list_name umccr_germline_panel',
         f'--pop_gnomad global',
         f'--classify_all',
-        f'--pcgr_dir {pcgr_refdata_dir}',
         f'--vcfanno_n_proc {threads}',
-        f'--vep_pick_order biotype,rank,appris,tsl,ccds,canonical,length,mane',
+        f'--vep_pick_order biotype,rank,appris,tsl,ccds,canonical,length,mane_plus_clinical,mane_select',
     ]
 
     if pcgrr_conda:
         command_args.append(f'--pcgrr_conda {pcgrr_conda}')
 
     # NOTE(SW): placed here to always have output directory last
-    command_args.append(f'--output_dir {temp_dir.name}')
+    command_args.append(f'--output_dir {cpsr_output_dir}')
 
     delimiter_padding = ' ' * 10
     delimiter = f' \\\n{delimiter_padding}'
@@ -258,8 +262,6 @@ def run_germline(input_fp, panel_fp, pcgr_refdata_dir, output_dir, threads=1, pc
 
     util.execute_command(command)
 
-    shutil.copytree(temp_dir.name, cpsr_output_dir)
-
     return cpsr_output_dir
 
 
@@ -267,10 +269,13 @@ def transfer_annotations_somatic(input_fp, tumor_name, pcgr_vcf_fp, pcgr_tsv_fp,
     # Set destination INFO field names and source TSV fields
     info_field_map = {
         constants.VcfInfo.PCGR_MUTATION_HOTSPOT: 'MUTATION_HOTSPOT',
-        constants.VcfInfo.PCGR_CLINVAR_CLNSIG: 'CLINVAR_CLNSIG',
+        constants.VcfInfo.PCGR_CLINVAR_CLASSIFICATION: 'CLINVAR_CLASSIFICATION',
         constants.VcfInfo.PCGR_TCGA_PANCANCER_COUNT: 'TCGA_PANCANCER_COUNT',
         constants.VcfInfo.PCGR_CSQ: 'CSQ',
     }
+
+    pcgr_tsv_fp = pathlib.Path(output_dir) / 'nosampleset.pcgr_acmg.grch38.snvs_indels.tiers.tsv'
+    pcgr_vcf_fp = pathlib.Path(output_dir) / 'nosampleset.pcgr_acmg.grch38.vcf.gz'
 
     # Enforce matching defined and source INFO annotations
     check_annotation_headers(info_field_map, pcgr_vcf_fp)
@@ -281,13 +286,11 @@ def transfer_annotations_somatic(input_fp, tumor_name, pcgr_vcf_fp, pcgr_tsv_fp,
     # Open filehandles, set required header entries
     input_fh = cyvcf2.VCF(input_fp)
 
-    util.add_vcf_header_entry(input_fh, constants.VcfInfo.PCGR_TIER)
+    util.add_vcf_header_entry(input_fh, constants.VcfInfo.PCGR_ACTIONABILITY_TIER)
     util.add_vcf_header_entry(input_fh, constants.VcfInfo.PCGR_CSQ)
     util.add_vcf_header_entry(input_fh, constants.VcfInfo.PCGR_MUTATION_HOTSPOT)
-    util.add_vcf_header_entry(input_fh, constants.VcfInfo.PCGR_CLINVAR_CLNSIG)
-    util.add_vcf_header_entry(input_fh, constants.VcfInfo.PCGR_COSMIC_COUNT)
+    util.add_vcf_header_entry(input_fh, constants.VcfInfo.PCGR_CLINVAR_CLASSIFICATION)
     util.add_vcf_header_entry(input_fh, constants.VcfInfo.PCGR_TCGA_PANCANCER_COUNT)
-    util.add_vcf_header_entry(input_fh, constants.VcfInfo.PCGR_ICGC_PCAWG_COUNT)
 
     output_fp = output_dir / f'{tumor_name}.annotations.vcf.gz'
     output_fh = cyvcf2.Writer(output_fp, input_fh, 'wz')
@@ -298,20 +301,19 @@ def transfer_annotations_somatic(input_fp, tumor_name, pcgr_vcf_fp, pcgr_tsv_fp,
         if record.CHROM == 'chrM':
             continue
         # Annotate and write
-        record_ann = annotate_record(record, pcgr_data)
+        record_ann = annotate_record(record, pcgr_data, allow_missing=True)
         output_fh.write_record(record_ann)
 
 
 def transfer_annotations_germline(input_fp, normal_name, cpsr_dir, output_dir):
     # Set destination INFO field names and source TSV fields
+    # Note: Only include fields that exist in CPSR v2.2.1 output
     info_field_map = {
-        constants.VcfInfo.CPSR_FINAL_CLASSIFICATION: 'FINAL_CLASSIFICATION',
-        constants.VcfInfo.CPSR_PATHOGENICITY_SCORE: 'CPSR_PATHOGENICITY_SCORE',
         constants.VcfInfo.CPSR_CLINVAR_CLASSIFICATION: 'CLINVAR_CLASSIFICATION',
         constants.VcfInfo.CPSR_CSQ: 'CSQ',
     }
 
-    cpsr_tsv_fp = pathlib.Path(cpsr_dir) / f'{normal_name}.cpsr.grch38.snvs_indels.tiers.tsv'
+    cpsr_tsv_fp = pathlib.Path(cpsr_dir) / f'{normal_name}.cpsr.grch38.classification.tsv.gz'
     cpsr_vcf_fp = pathlib.Path(cpsr_dir) / f'{normal_name}.cpsr.grch38.vcf.gz'
 
     # Enforce matching defined and source INFO annotations
@@ -323,8 +325,6 @@ def transfer_annotations_germline(input_fp, normal_name, cpsr_dir, output_dir):
     # Open filehandles, set required header entries
     input_fh = cyvcf2.VCF(input_fp)
 
-    util.add_vcf_header_entry(input_fh, constants.VcfInfo.CPSR_FINAL_CLASSIFICATION)
-    util.add_vcf_header_entry(input_fh, constants.VcfInfo.CPSR_PATHOGENICITY_SCORE)
     util.add_vcf_header_entry(input_fh, constants.VcfInfo.CPSR_CLINVAR_CLASSIFICATION)
     util.add_vcf_header_entry(input_fh, constants.VcfInfo.CPSR_CSQ)
 
@@ -352,13 +352,14 @@ def check_annotation_headers(info_field_map, vcf_fp):
         try:
             header_src_entry = vcf_fh.get_header_type(header_src)
         except KeyError:
+            print(f"Missing in VCF: {header_src}")
             continue
 
         header_dst_entry = util.get_vcf_header_entry(header_dst)
         # Remove leading and trailing quotes from source
         header_src_description_unquoted = header_src_entry['Description'].strip('"')
-        assert  header_src_description_unquoted == header_dst_entry['Description']
-
+        if header_src_description_unquoted != header_dst_entry['Description']:
+            raise AssertionError(f"Mismatch for {header_src}:\nVCF: {header_src_description_unquoted}\nExpected: {header_dst_entry['Description']}")
 
 def collect_pcgr_annotation_data(tsv_fp, vcf_fp, info_field_map):
     # Gather all annotations from TSV
@@ -368,27 +369,13 @@ def collect_pcgr_annotation_data(tsv_fp, vcf_fp, info_field_map):
             key, record_ann = get_annotation_entry_tsv(record, info_field_map)
             assert key not in data_tsv
 
-            # Process PCGR_TIER
-            # TIER_1, TIER_2, TIER_3, TIER_4, NONCODING
-            record_ann[constants.VcfInfo.PCGR_TIER] = record['TIER'].replace(' ', '_')
+            # Process PCGR_ACTIONABILITY_TIER
+            # TIER 1, TIER 2, TIER 3, TIER 4, NONCODING
+            record_ann[constants.VcfInfo.PCGR_ACTIONABILITY_TIER] = record['ACTIONABILITY_TIER'].replace(' ', '_')
 
-            # Count COSMIC hits
-            if record['COSMIC_MUTATION_ID'] == 'NA':
-                cosmic_count = 0
-            else:
-                cosmic_count = len(record['COSMIC_MUTATION_ID'].split('&'))
-            record_ann[constants.VcfInfo.PCGR_COSMIC_COUNT] = cosmic_count
-
-            # Count ICGC-PCAWG hits by taking sum of affected donors where the annotation value has
-            # the following format: project_code|tumor_type|affected_donors|tested_donors|frequency
-            icgc_pcawg_count = 0
-            if record['ICGC_PCAWG_OCCURRENCE'] != 'NA':
-                for pcawg_hit_data in record['ICGC_PCAWG_OCCURRENCE'].split(','):
-                    pcawrg_hit_data_fields = pcawg_hit_data.split('|')
-                    affected_donors = int(pcawrg_hit_data_fields[2])
-                    icgc_pcawg_count += affected_donors
-                assert icgc_pcawg_count > 0
-            record_ann[constants.VcfInfo.PCGR_ICGC_PCAWG_COUNT] = icgc_pcawg_count
+            # Process PCGR_ACTIONABILITY_TIER
+            # TIER 1, TIER 2, TIER 3, TIER 4, NONCODING
+            record_ann[constants.VcfInfo.PCGR_ACTIONABILITY_TIER] = record['ACTIONABILITY_TIER']
 
             # Store annotation data
             data_tsv[key] = record_ann
@@ -404,7 +391,7 @@ def collect_cpsr_annotation_data(tsv_fp, vcf_fp, info_field_map):
     # Gather annotations from TSV
     data_tsv = dict()
     gdot_re = re.compile('^(?P<chrom>[\dXYM]+):g\.(?P<pos>\d+)(?P<ref>[A-Z]+)>(?P<alt>[A-Z]+)$')
-    with open(tsv_fp, 'r') as tsv_fh:
+    with gzip.open(tsv_fp, 'rt') as tsv_fh:
         for record in csv.DictReader(tsv_fh, delimiter='\t'):
             # Decompose CPSR 'GENOMIC_CHANGE' field into CHROM, POS, REF, and ALT
             re_result = gdot_re.match(record['GENOMIC_CHANGE'])
@@ -426,6 +413,24 @@ def collect_cpsr_annotation_data(tsv_fp, vcf_fp, info_field_map):
     # Compile annotations, prefering TSV source
     return compile_annotation_data(data_tsv, data_vcf)
 
+def parse_genomic_change(genomic_change):
+    """
+    Parse a genomic change string, e.g., "3:g.41224645T>C"
+    Returns a tuple: (chrom, pos, ref, alt)
+    """
+    # Regular expression for the format "chrom:g.posRef>Alt"
+    pattern = r'^(?P<chrom>\w+):g\.(?P<pos>\d+)(?P<ref>\w+)>(?P<alt>\w+)$'
+    match = re.match(pattern, genomic_change)
+    if not match:
+        raise ValueError(f"Format not recognized: {genomic_change}")
+    
+    # Get values and format as needed
+    chrom = f"chr{match.group('chrom')}"
+    pos = int(match.group('pos'))
+    ref = match.group('ref')
+    alt = match.group('alt')
+    return chrom, pos, ref, alt
+
 
 def get_annotations_vcf(vcf_fp, info_field_map):
     data_vcf = dict()
@@ -445,10 +450,14 @@ def get_annotations_vcf(vcf_fp, info_field_map):
 
 
 def get_annotation_entry_tsv(record, info_field_map):
-    # Set lookup key; PCGR/CPSR strips leading 'chr' from contig names
-    chrom = f'chr{record["CHROM"]}'
-    pos = int(record['POS'])
-    key = (chrom, pos, record['REF'], record['ALT'])
+    # If GENOMIC_CHANGE is present, parse it for coordinates; otherwise, use separate fields.
+    if "GENOMIC_CHANGE" in record and record["GENOMIC_CHANGE"]:
+        chrom, pos, ref, alt = parse_genomic_change(record["GENOMIC_CHANGE"])
+
+    if not chrom.startswith('chr'):
+        chrom = f'chr{chrom}'
+
+    key = (chrom, pos, ref, alt)
 
     record_ann = dict()
     for info_dst, info_src in info_field_map.items():
@@ -510,7 +519,6 @@ def split_vcf(input_vcf, output_dir):
     chunk_number = 1
     variant_count = 0
     base_filename = pathlib.Path(input_vcf).stem
-    chunk_filename = output_dir / f"{base_filename}_chunk{chunk_number}.vcf"
     base_filename = input_vcf.stem
     chunk_filename = output_dir / f"{base_filename}_chunk{chunk_number}.vcf"
     chunk_files.append(chunk_filename)
@@ -540,7 +548,7 @@ def split_vcf(input_vcf, output_dir):
     logger.info(f"VCF file split into {len(chunk_files)} chunks.")
     return chunk_files
 
-def run_somatic_chunck(vcf_chunks, pcgr_data_dir, output_dir, pcgr_output_dir, max_threads, pcgr_conda, pcgrr_conda):
+def run_somatic_chunck(vcf_chunks, pcgr_data_dir, vep_dir, output_dir, pcgr_output_dir, max_threads, pcgr_conda, pcgrr_conda):
     pcgr_tsv_files = []
     pcgr_vcf_files = []
     num_chunks = len(vcf_chunks)
@@ -555,7 +563,7 @@ def run_somatic_chunck(vcf_chunks, pcgr_data_dir, output_dir, pcgr_output_dir, m
             # Assign extra thread to the first 'threads_rem' chunks
             additional_thread = 1 if chunk_number <= threads_rem else 0
             total_threads = threads_per_chunk + additional_thread
-            futures[executor.submit(run_somatic, vcf_file, pcgr_data_dir, pcgr_output_dir, chunk_number, total_threads, pcgr_conda, pcgrr_conda)] = chunk_number
+            futures[executor.submit(run_somatic, vcf_file, pcgr_data_dir, vep_dir, pcgr_output_dir, chunk_number, total_threads, pcgr_conda, pcgrr_conda)] = chunk_number
         for future in concurrent.futures.as_completed(futures):
             try:
                 pcgr_tsv_fp, pcgr_vcf_fp = future.result()
@@ -577,7 +585,7 @@ def merging_pcgr_files(output_dir, pcgr_vcf_files, pcgr_tsv_fp):
     util.merge_tsv_files(pcgr_tsv_fp, merged_tsv_fp)
 
     # Step 5: Merge all VCF files into a single file in the pcgr directory
-    merged_vcf_path = pcgr_dir / "nosampleset.pcgr_acmg.grch38"
+    merged_vcf_path = pcgr_dir / "nosampleset.pcgr.grch38.pass.vcf.gz"
     merged_vcf = util.merge_vcf_files(pcgr_vcf_files, merged_vcf_path)
 
     return merged_vcf, merged_tsv_fp

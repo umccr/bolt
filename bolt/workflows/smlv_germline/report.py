@@ -23,6 +23,7 @@ from ...common import pcgr
 
 @click.option('--germline_panel_list_fp', required=True, type=click.Path(exists=True))
 @click.option('--pcgr_data_dir', required=True, type=click.Path(exists=True))
+@click.option('--vep_dir', required=True, type=click.Path(exists=True))
 
 @click.option('--threads', required=True, type=int, default=1)
 
@@ -73,6 +74,7 @@ def entry(ctx, **kwargs):
         cpsr_prep_fp,
         kwargs['germline_panel_list_fp'],
         kwargs['pcgr_data_dir'],
+        kwargs['vep_dir'],
         output_dir,
         threads=kwargs['threads'],
         pcgr_conda=kwargs['pcgr_conda'],
