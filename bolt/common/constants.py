@@ -6,6 +6,7 @@ import enum
 ######################################
 MAX_SOMATIC_VARIANTS = 500_000
 MAX_SOMATIC_VARIANTS_GNOMAD_FILTER = 0.01
+MNV_COMPONENT_PROMOTION_AF_DELTA = 0.10
 
 
 ####################################
@@ -60,6 +61,7 @@ class VcfFilter(enum.Enum):
     PON = 'PON'
     ENCODE = 'ENCODE'
     GNOMAD_COMMON = 'gnomAD_common'
+    MNV_COMBINED = 'mnv_combined'
 
     @property
     def namespace(self):
@@ -185,6 +187,9 @@ VCF_HEADER_ENTRIES = {
     },
     VcfFilter.GNOMAD_COMMON: {
         'Description': f'gnomAD AF >= {MAX_GNOMAD_AF}',
+    },
+    VcfFilter.MNV_COMBINED: {
+        'Description': 'VARIANT IS AN MNV COMBINED CALL',
     },
 
 

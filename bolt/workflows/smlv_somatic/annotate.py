@@ -1,4 +1,5 @@
 import pathlib
+import collections
 
 
 import click
@@ -72,6 +73,13 @@ def entry(ctx, **kwargs):
         output_dir,
     )
 
+    # Promote mnv_component variants to PASS when matching PASS MNV by MNVTAG and AF proximity
+    promoted_fp = promote_mnv_components(
+        pon_fp,
+        kwargs['tumor_name'],
+        output_dir,
+    )
+
     # Annotate with cancer-related and functional information from a range of sources using PCGR
     #   - Select variants to process - there is an upper limit for PCGR of around 500k
     #   - Set tumor and normal AF and DP in INFO for PCGR and remove all other annotations
@@ -86,7 +94,7 @@ def entry(ctx, **kwargs):
     #       - Hits in PCAWG [INFO/PCGR_ICGC_PCAWG_COUNT]
     # Set selected data or full input
     selection_data = select_variants(
-        pon_fp,
+        promoted_fp,
         kwargs['tumor_name'],
         kwargs['cancer_genes_fp'],
         output_dir,
@@ -167,6 +175,75 @@ def panel_of_normal_annotations(input_fp, tumor_name, threads, pon_dir, output_d
     '''
 
     util.execute_command(command)
+    return output_fp
+
+
+def promote_mnv_components(input_fp, tumor_name, output_dir):
+    """Reconcile MNV combined and component calls using MNVTAG.
+    https://github.com/umccr/sash/issues/19#issuecomment-3251447307 
+
+    - Promote components: remove 'mnv_component' from FILTER; set PASS if no other filters
+    - Demote combined: for non-component MNV-like records with the same MNVTAG, if tumor AF is
+      within ±MNV_COMPONENT_PROMOTION_AF_DELTA of any component AF for that MNVTAG, set
+      FILTER='mnv_combined' (only when the record is currently PASS)
+    """
+
+    # Collect component AFs per MNVTAG
+    vcf = cyvcf2.VCF(input_fp)
+    tumor_index = vcf.samples.index(tumor_name)
+    component_afs_by_tag = collections.defaultdict(list)
+    for record in vcf:
+        mnvtag = record.INFO.get('MNVTAG')
+        if not mnvtag:
+            continue
+        if 'mnv_component' in record.FILTERS:
+            try:
+                tumor_af = record.format('AF')[tumor_index, 0]
+            except Exception:
+                continue
+            if tumor_af is None:
+                continue
+            component_afs_by_tag[mnvtag].append(float(tumor_af))
+
+    # Write out, applying promotions and combined demotion
+    vcf = cyvcf2.VCF(input_fp)
+    # Ensure header includes mnv_combined FILTER
+    util.add_vcf_header_entry(vcf, constants.VcfFilter.MNV_COMBINED)
+
+    output_fp = output_dir / f'{tumor_name}.mnv_promoted.vcf.gz'
+    output_fh = cyvcf2.Writer(output_fp, vcf, 'wz')
+
+    tumor_index = vcf.samples.index(tumor_name)
+    af_delta = float(constants.MNV_COMPONENT_PROMOTION_AF_DELTA)
+    for record in vcf:
+        mnvtag = record.INFO.get('MNVTAG')
+        if mnvtag and mnvtag in component_afs_by_tag:
+            # Promote components: drop mnv_component; set PASS if no other filters
+            if 'mnv_component' in record.FILTERS:
+                other_filters = [f for f in record.FILTERS if f not in ('PASS', 'mnv_component')]
+                record.FILTER = ';'.join(other_filters) if other_filters else 'PASS'
+            else:
+                # Demote combined PASS calls matching by MNVTAG and AF
+                is_mnv_like = (len(record.REF) > 1) or any(len(a) > 1 for a in (record.ALT or []))
+                if is_mnv_like:
+                    try:
+                        tumor_af = record.format('AF')[tumor_index, 0]
+                    except Exception:
+                        tumor_af = None
+                    if tumor_af is not None:
+                        tumor_af_value = round(float(tumor_af), 3)
+                        component_af_values = [round(v, 3) for v in component_afs_by_tag[mnvtag]]
+                        min_abs_af_diff = min(abs(tumor_af_value - v) for v in component_af_values)
+                        existing_non_pass = [f for f in record.FILTERS if f != 'PASS']
+                        if min_abs_af_diff <= af_delta and not existing_non_pass:
+                            record.FILTER = constants.VcfFilter.MNV_COMBINED.value
+
+        output_fh.write_record(record)
+
+    output_fh.close()
+
+    # Index output
+    util.execute_command(f"bcftools index -t {output_fp}")
     return output_fp
 
 
