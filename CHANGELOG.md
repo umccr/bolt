@@ -2,7 +2,7 @@
 
 ## dev
 
-- [14](https://github.com/umccr/bolt/pull/14) - Version bump to 0.2.15
+- [14](https://github.com/umccr/bolt/pull/14) - gpgr version bump to 0.2.2
 
 - [3](https://github.com/scwatts/bolt/pull/3) - Improve PCGR / CPSR argument handling
 
