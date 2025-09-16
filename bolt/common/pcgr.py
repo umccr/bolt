@@ -8,6 +8,7 @@ import re
 import shutil
 import tempfile
 import logging
+import concurrent.futures
 
 import cyvcf2
 
@@ -228,7 +229,7 @@ def run_germline(input_fp, panel_fp, pcgr_refdata_dir, vep_dir, output_dir, thre
         f'--input_vcf {input_fp}',
         f'--genome_assembly grch38',
         f'--custom_list {panel_fp}',
-        f'--vep_dir {pcgr_refdata_dir}',
+        f'--vep_dir {vep_dir}',
         f'--refdata_dir {pcgr_refdata_dir}',
         # NOTE(SW): probably useful to add versioning information here; weigh against maintainence
         # burden
@@ -274,8 +275,9 @@ def transfer_annotations_somatic(input_fp, tumor_name, pcgr_vcf_fp, pcgr_tsv_fp,
         constants.VcfInfo.PCGR_CSQ: 'CSQ',
     }
 
-    pcgr_tsv_fp = pathlib.Path(output_dir) / 'nosampleset.pcgr_acmg.grch38.snvs_indels.tiers.tsv'
-    pcgr_vcf_fp = pathlib.Path(output_dir) / 'nosampleset.pcgr_acmg.grch38.vcf.gz'
+    # Respect paths provided; do not override
+    pcgr_tsv_fp = pathlib.Path(pcgr_tsv_fp)
+    pcgr_vcf_fp = pathlib.Path(pcgr_vcf_fp)
 
     # Enforce matching defined and source INFO annotations
     check_annotation_headers(info_field_map, pcgr_vcf_fp)
@@ -364,18 +366,27 @@ def check_annotation_headers(info_field_map, vcf_fp):
 def collect_pcgr_annotation_data(tsv_fp, vcf_fp, info_field_map):
     # Gather all annotations from TSV
     data_tsv = dict()
-    with open(tsv_fp, 'r') as tsv_fh:
+    # Read gz or plain text based on extension
+    open_fn = gzip.open if str(tsv_fp).endswith('.gz') else open
+    with open_fn(tsv_fp, 'rt') as tsv_fh:
         for record in csv.DictReader(tsv_fh, delimiter='\t'):
             key, record_ann = get_annotation_entry_tsv(record, info_field_map)
             assert key not in data_tsv
 
-            # Process PCGR_ACTIONABILITY_TIER
-            # TIER 1, TIER 2, TIER 3, TIER 4, NONCODING
-            record_ann[constants.VcfInfo.PCGR_ACTIONABILITY_TIER] = record['ACTIONABILITY_TIER'].replace(' ', '_')
-
-            # Process PCGR_ACTIONABILITY_TIER
-            # TIER 1, TIER 2, TIER 3, TIER 4, NONCODING
-            record_ann[constants.VcfInfo.PCGR_ACTIONABILITY_TIER] = record['ACTIONABILITY_TIER']
+            # Normalize PCGR actionability tier to simple values: '1','2','3','4','N'
+            raw_tier = (record.get('ACTIONABILITY_TIER') or '').strip()
+            tier_norm = raw_tier.replace('_', ' ').upper()
+            if tier_norm in ('TIER 1','TIER1','1'):
+                tier_val = '1'
+            elif tier_norm in ('TIER 2','TIER2','2'):
+                tier_val = '2'
+            elif tier_norm in ('TIER 3','TIER3','3'):
+                tier_val = '3'
+            elif tier_norm in ('TIER 4','TIER4','4'):
+                tier_val = '4'
+            else:
+                tier_val = 'N'
+            record_ann[constants.VcfInfo.PCGR_ACTIONABILITY_TIER] = tier_val
 
             # Store annotation data
             data_tsv[key] = record_ann
@@ -450,12 +461,18 @@ def get_annotations_vcf(vcf_fp, info_field_map):
 
 
 def get_annotation_entry_tsv(record, info_field_map):
-    # If GENOMIC_CHANGE is present, parse it for coordinates; otherwise, use separate fields.
-    if "GENOMIC_CHANGE" in record and record["GENOMIC_CHANGE"]:
-        chrom, pos, ref, alt = parse_genomic_change(record["GENOMIC_CHANGE"])
-
-    if not chrom.startswith('chr'):
-        chrom = f'chr{chrom}'
+    # If GENOMIC_CHANGE is present, parse it; otherwise, fallback to CHROM/POS/REF/ALT fields
+    chrom = pos = ref = alt = None
+    if 'GENOMIC_CHANGE' in record and record['GENOMIC_CHANGE']:
+        chrom, pos, ref, alt = parse_genomic_change(record['GENOMIC_CHANGE'])
+    else:
+        chrom = record.get('CHROM') or record.get('Chromosome')
+        pos = int(record.get('POS') or record.get('Start_position'))
+        ref = record.get('REF')
+        alt = record.get('ALT')
+        # Ensure chrom has 'chr' prefix
+        if chrom and not str(chrom).startswith('chr'):
+            chrom = f'chr{chrom}'
 
     key = (chrom, pos, ref, alt)
 
@@ -518,7 +535,7 @@ def split_vcf(input_vcf, output_dir):
     chunk_files = []
     chunk_number = 1
     variant_count = 0
-    base_filename = pathlib.Path(input_vcf).stem
+    input_vcf = pathlib.Path(input_vcf)
     base_filename = input_vcf.stem
     chunk_filename = output_dir / f"{base_filename}_chunk{chunk_number}.vcf"
     chunk_files.append(chunk_filename)
@@ -606,7 +623,7 @@ def get_variant_filter_data(variant):
     data = {e: None for e in attribute_names}
 
 
-    data['tier'] = variant.INFO['PCGR_TIER']
+    data['tier'] = variant.INFO.get('PCGR_ACTIONABILITY_TIER')
 
 
     info_keys = [k for k, v in variant.INFO]
