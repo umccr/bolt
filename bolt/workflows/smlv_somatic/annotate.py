@@ -98,43 +98,30 @@ def entry(ctx, **kwargs):
     total_variants = util.count_vcf_records(pcgr_prep_fp)
     print(f"Total number of variants in the input VCF: {total_variants}")
 
-    # Run PCGR in chunks if the total number of variants exceeds the maximum allowed for somatic variants
+    # Run PCGR in chunks if exceeding the maximum allowed for somatic variants
     if total_variants > constants.MAX_SOMATIC_VARIANTS:
-        vcf_chunks = util.split_vcf(
-            pcgr_prep_fp,
-            output_dir
+        vcf_chunks = pcgr.split_vcf(pcgr_prep_fp, output_dir)
+        pcgr_tsv_fp, pcgr_vcf_fp = pcgr.run_somatic_chunck(
+            vcf_chunks,
+            kwargs['pcgr_data_dir'],
+            kwargs['vep_dir'],
+            output_dir,
+            pcgr_output_dir,
+            kwargs['threads'],
+            kwargs['pcgr_conda'],
+            kwargs['pcgrr_conda'],
         )
-        pcgr_tsv_fp, pcgr_vcf_fp = util.run_somatic_chunck(
-        vcf_chunks,
-        kwargs['pcgr_data_dir'],
-        kwargs['vep_dir'],
-        output_dir,
-        pcgr_output_dir,
-        kwargs['threads'],
-        kwargs['pcgr_conda'],
-        kwargs['pcgrr_conda']
-    )
     else:
         pcgr_tsv_fp, pcgr_vcf_fp = pcgr.run_somatic(
-        pcgr_prep_fp,
-        kwargs['pcgr_data_dir'],
-        output_dir,
-        pcgr_output_dir,
-        kwargs['threads'],
-        kwargs['pcgr_conda'],
-        kwargs['pcgrr_conda']
-    )
-    else:
-        pcgr_tsv_fp, pcgr_vcf_fp = pcgr.run_somatic(
-        pcgr_prep_fp,
-        kwargs['pcgr_data_dir'],
-        kwargs['vep_dir'],
-        pcgr_output_dir,
-        chunk_nbr=None,
-        threads=kwargs['threads'],
-        pcgr_conda=kwargs['pcgr_conda'],
-        pcgrr_conda=kwargs['pcgrr_conda'],
-    )
+            pcgr_prep_fp,
+            kwargs['pcgr_data_dir'],
+            kwargs['vep_dir'],
+            pcgr_output_dir,
+            chunk_nbr=None,
+            threads=kwargs['threads'],
+            pcgr_conda=kwargs['pcgr_conda'],
+            pcgrr_conda=kwargs['pcgrr_conda'],
+        )
 
     # Transfer PCGR annotations to full set of variants
     pcgr.transfer_annotations_somatic(
