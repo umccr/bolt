@@ -64,7 +64,7 @@ def entry(ctx, **kwargs):
 
     # Optional dragen hrd argument
     if kwargs['dragen_hrd_fp']:
-        hrdetect_line = f'--dragen_hrd {kwargs['dragen_hrd_fp']}'
+        hrdetect_arg = f"--dragen_hrd {kwargs['dragen_hrd_fp']}"
 
     # Run gpgr canrep
     command = fr'''
@@ -100,7 +100,7 @@ def entry(ctx, **kwargs):
             --img_dir {output_image_dir}/ \
             --result_outdir {output_table_dir}/ \
             --out_file {output_dir}/{kwargs["tumor_name"]}.cancer_report.html
-            {hrdetect_line}\
+            {hrdetect_arg}\
     '''
     util.execute_command(command)
 
