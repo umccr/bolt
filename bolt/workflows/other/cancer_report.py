@@ -96,11 +96,11 @@ def entry(ctx, **kwargs):
             \
             --key_genes {kwargs['cancer_genes_fp']} \
             --oncokb_genes {kwargs['oncokb_genes_fp']} \
+            {hrdetect_arg} \
             \
             --img_dir {output_image_dir}/ \
             --result_outdir {output_table_dir}/ \
-            --out_file {output_dir}/{kwargs["tumor_name"]}.cancer_report.html
-            {hrdetect_arg} \
+            --out_file {output_dir}/{kwargs['tumor_name']}.cancer_report.html
     '''
     util.execute_command(command)
 
