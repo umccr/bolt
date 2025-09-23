@@ -63,6 +63,7 @@ def entry(ctx, **kwargs):
     output_table_dir = output_dir / 'cancer_report_tables'
 
     # Optional dragen hrd argument
+    hrdetect_arg = ''
     if kwargs['dragen_hrd_fp']:
         hrdetect_arg = f"--dragen_hrd {kwargs['dragen_hrd_fp']}"
 
@@ -92,11 +93,11 @@ def entry(ctx, **kwargs):
             --virusbreakend_tsv {kwargs['virusbreakend_dir']}/{kwargs['tumor_name']}.virusbreakend.vcf.summary.tsv \
             --virusbreakend_vcf {kwargs['virusbreakend_dir']}/{kwargs['tumor_name']}.virusbreakend.vcf \
             \
+            {hrdetect_arg} \
             --bcftools_stats {kwargs['smlv_somatic_bcftools_stats_fp']} \
             \
             --key_genes {kwargs['cancer_genes_fp']} \
             --oncokb_genes {kwargs['oncokb_genes_fp']} \
-            {hrdetect_arg} \
             \
             --img_dir {output_image_dir}/ \
             --result_outdir {output_table_dir}/ \
