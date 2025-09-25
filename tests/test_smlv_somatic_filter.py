@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from pathlib import Path
 
 
 import cyvcf2
@@ -8,6 +9,40 @@ import cyvcf2
 import bolt.workflows.smlv_somatic.filter as smlv_somatic_filter
 import bolt.common.constants as bolt_constants
 import bolt.util as bolt_util
+
+
+SUBSET_VCF_FP = Path(__file__).parent.parent / 'data' / 'testdata' / 'filter' / 'smlv_somatic_filter_subset.vcf'
+SUBSET_TUMOR_SAMPLE_NAME = 'L2300943'
+
+
+def load_subset_variant(chrom, pos, alt=None):
+    # The subset VCF lives in `data/testdata/...` and is DVC-managed.
+    # If the file hasn't been pulled into the workspace, skip these tests
+    # instead of failing so local runs without `dvc pull` stay green.
+    if not SUBSET_VCF_FP.exists():
+        raise unittest.SkipTest(
+            f'Missing subset VCF at {SUBSET_VCF_FP} (run `dvc pull` to fetch test data)'
+        )
+
+    vcf_handle = cyvcf2.VCF(str(SUBSET_VCF_FP))
+    for header_enum in bolt_constants.VCF_HEADER_ENTRIES:
+        bolt_util.add_vcf_header_entry(vcf_handle, header_enum)
+
+    try:
+        tumor_index = vcf_handle.samples.index(SUBSET_TUMOR_SAMPLE_NAME)
+    except ValueError as exc:
+        raise AssertionError(
+            f'Tumor sample {SUBSET_TUMOR_SAMPLE_NAME} not found in subset VCF'
+        ) from exc
+
+    for record in vcf_handle:
+        if record.CHROM != chrom or record.POS != pos:
+            continue
+        if alt is not None and alt not in record.ALT:
+            continue
+        return record, tumor_index, vcf_handle
+
+    raise AssertionError(f'Variant {chrom}:{pos} alt={alt} not present in subset VCF')
 
 
 # TODO(SW): place this helper code to obtain cyvcf2 Variant classes somewhere else
@@ -46,10 +81,10 @@ def get_record_from_str(variant_str):
 
 def get_record(
     chrom='chr1',
-    pos='.',
+    pos='100',
     vid='.',
-    ref='.',
-    alt='.',
+    ref='C',
+    alt='G',
     qual='.',
     vfilter='.',
     info_data=None,
@@ -269,3 +304,71 @@ class TestSmlvSomaticFilter(unittest.TestCase):
         assert not record.FILTER
         assert record.INFO.get(bolt_constants.VcfInfo.RESCUED_FILTERS_PENDING.value) is None
         assert record.INFO.get(rescued_filters_str) == 'DIFFICULT_segdup'
+
+
+class TestSmlvSomaticFilterSubset(unittest.TestCase):
+
+    def test_subset_filters_low_af_difficult_region(self):
+        record, tumor_index, vcf_handle = load_subset_variant('chr1', 95011, alt='G')
+        smlv_somatic_filter.set_filter_data(record, tumor_index)
+
+        applied_filters = set(record.FILTERS)
+        expected_filters = {
+            bolt_constants.VcfFilter.MIN_AF.value,
+            bolt_constants.VcfFilter.MIN_AD.value,
+            bolt_constants.VcfFilter.MIN_AD_NON_GIAB.value,
+            bolt_constants.VcfFilter.MIN_AD_DIFFICULT.value,
+            bolt_constants.VcfFilter.PON.value,
+            bolt_constants.VcfFilter.ENCODE.value,
+        }
+
+        assert expected_filters.issubset(applied_filters)
+
+    def test_subset_filters_population_common_variant(self):
+        record, tumor_index, vcf_handle = load_subset_variant('chr1', 95011, alt='TG')
+        smlv_somatic_filter.set_filter_data(record, tumor_index)
+
+        applied_filters = set(record.FILTERS)
+        assert bolt_constants.VcfFilter.GNOMAD_COMMON.value in applied_filters
+        assert bolt_constants.VcfFilter.PON.value in applied_filters
+
+    def test_subset_pon_threshold_exclusive(self):
+        record, tumor_index, vcf_handle = load_subset_variant('chr1', 17008174, alt='G')
+        smlv_somatic_filter.set_filter_data(record, tumor_index)
+
+        assert bolt_constants.VcfFilter.PON.value not in record.FILTERS
+
+    def test_subset_min_ad_difficult_threshold_inclusive(self):
+        record, tumor_index, vcf_handle = load_subset_variant('chr1', 45290397, alt='T')
+        smlv_somatic_filter.set_filter_data(record, tumor_index)
+
+        assert bolt_constants.VcfFilter.MIN_AD_DIFFICULT.value not in record.FILTERS
+
+    def test_subset_min_ad_non_giab_without_difficult_region(self):
+        record, tumor_index, vcf_handle = load_subset_variant('chr1', 45520199, alt='C')
+        smlv_somatic_filter.set_filter_data(record, tumor_index)
+
+        assert bolt_constants.VcfFilter.MIN_AD_NON_GIAB.value in record.FILTERS
+
+    def test_subset_rescue_pending_filters_only(self):
+        record, tumor_index, vcf_handle = load_subset_variant('chr3', 50100280, alt='C')
+        smlv_somatic_filter.set_filter_data(record, tumor_index)
+
+        assert not record.FILTER
+        assert record.INFO.get(bolt_constants.VcfInfo.RESCUED_FILTERS_EXISTING.value) is None
+        assert record.INFO.get(bolt_constants.VcfInfo.RESCUED_FILTERS_PENDING.value) == 'PON,min_AF'
+
+    def test_subset_rescue_existing_and_pending_filters(self):
+        record, tumor_index, vcf_handle = load_subset_variant('chr5', 134727809, alt='T')
+        smlv_somatic_filter.set_filter_data(record, tumor_index)
+
+        assert not record.FILTER
+        assert record.INFO.get(bolt_constants.VcfInfo.RESCUED_FILTERS_EXISTING.value) == 'weak_evidence'
+        assert record.INFO.get(bolt_constants.VcfInfo.RESCUED_FILTERS_PENDING.value) == 'PON,gnomAD_common'
+
+    def test_subset_sage_hotspot_variant_remains_unmodified(self):
+        record, tumor_index, vcf_handle = load_subset_variant('chr8', 38428420, alt='A')
+        smlv_somatic_filter.set_filter_data(record, tumor_index)
+
+        assert not record.FILTER
+        assert record.INFO.get(bolt_constants.VcfInfo.SAGE_HOTSPOT_RESCUE.value) is None

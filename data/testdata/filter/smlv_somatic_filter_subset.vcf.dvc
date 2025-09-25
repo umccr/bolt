@@ -1,0 +1,5 @@
+outs:
+- md5: 701a4002311856174c0b4670adc4fe7c
+  size: 206811
+  hash: md5
+  path: smlv_somatic_filter_subset.vcf

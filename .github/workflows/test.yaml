@@ -19,6 +19,10 @@ jobs:
         with:
           environment-file: conda/env/bolt_env.yml
           conda-solver: libmamba
+      - name: Pull DVC data
+        run: |
+          pip install dvc
+          dvc pull
       - name: Run Python tests
         run: |
           python3 -m unittest discover tests/ --buffer
