@@ -7,11 +7,14 @@ import pathlib
 import click
 import cyvcf2
 import yaml
+import logging
 
 
 from ... import util
 from ...common import constants
 from ...common import pcgr
+from ...logging_config import setup_logging
+logger = logging.getLogger(__name__)
 
 
 @click.command(name='report')
@@ -129,6 +132,7 @@ def entry(ctx, **kwargs):
         output_dir,
     )
 
+    pcgr_output_dir = output_dir / 'pcgr'
     pcgr.run_somatic(
         pcgr_prep_fp,
         kwargs['pcgr_data_dir'],

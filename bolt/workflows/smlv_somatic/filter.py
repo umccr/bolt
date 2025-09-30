@@ -3,10 +3,13 @@ import pathlib
 
 
 import cyvcf2
+import logging
 
 
 from ... import util
 from ...common import constants
+from ...logging_config import setup_logging
+logger = logging.getLogger(__name__)
 
 
 @click.command(name='filter')
