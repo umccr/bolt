@@ -29,7 +29,7 @@ from ... import util
 @click.option('--purple_dir', required=True, type=click.Path(exists=True))
 @click.option('--virusbreakend_dir', required=True, type=click.Path(exists=True))
 
-@click.option('--dragen_hrd_fp', required=True, type=click.Path(exists=True))
+@click.option('--dragen_hrd_fp', required=False, type=click.Path(exists=True))
 
 @click.option('--cancer_genes_fp', required=True, type=click.Path(exists=True))
 @click.option('--oncokb_genes_fp', required=True, type=click.Path(exists=True))
@@ -62,6 +62,11 @@ def entry(ctx, **kwargs):
     batch_name = f'{kwargs["subject_name"]}_{kwargs["tumor_name"]}'
     output_table_dir = output_dir / 'cancer_report_tables'
 
+    # Optional dragen hrd argument
+    dragen_hrd_arg = ''
+    if kwargs['dragen_hrd_fp']:
+        dragen_hrd_arg = f"--dragen_hrd {kwargs['dragen_hrd_fp']}"
+
     # Run gpgr canrep
     command = fr'''
         gpgr.R canrep \
@@ -88,7 +93,7 @@ def entry(ctx, **kwargs):
             --virusbreakend_tsv {kwargs['virusbreakend_dir']}/{kwargs['tumor_name']}.virusbreakend.vcf.summary.tsv \
             --virusbreakend_vcf {kwargs['virusbreakend_dir']}/{kwargs['tumor_name']}.virusbreakend.vcf \
             \
-            --dragen_hrd {kwargs['dragen_hrd_fp']} \
+            {dragen_hrd_arg} \
             --bcftools_stats {kwargs['smlv_somatic_bcftools_stats_fp']} \
             \
             --key_genes {kwargs['cancer_genes_fp']} \
@@ -96,7 +101,7 @@ def entry(ctx, **kwargs):
             \
             --img_dir {output_image_dir}/ \
             --result_outdir {output_table_dir}/ \
-            --out_file {output_dir}/{kwargs["tumor_name"]}.cancer_report.html
+            --out_file {output_dir}/{kwargs['tumor_name']}.cancer_report.html
     '''
     util.execute_command(command)
 
