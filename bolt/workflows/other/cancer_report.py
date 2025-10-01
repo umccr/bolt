@@ -63,9 +63,9 @@ def entry(ctx, **kwargs):
     output_table_dir = output_dir / 'cancer_report_tables'
 
     # Optional dragen hrd argument
-    hrdetect_arg = ''
+    dragen_hrd_arg = ''
     if kwargs['dragen_hrd_fp']:
-        hrdetect_arg = f"--dragen_hrd {kwargs['dragen_hrd_fp']}"
+        dragen_hrd_arg = f"--dragen_hrd {kwargs['dragen_hrd_fp']}"
 
     # Run gpgr canrep
     command = fr'''
@@ -93,7 +93,7 @@ def entry(ctx, **kwargs):
             --virusbreakend_tsv {kwargs['virusbreakend_dir']}/{kwargs['tumor_name']}.virusbreakend.vcf.summary.tsv \
             --virusbreakend_vcf {kwargs['virusbreakend_dir']}/{kwargs['tumor_name']}.virusbreakend.vcf \
             \
-            {hrdetect_arg} \
+            {dragen_hrd_arg} \
             --bcftools_stats {kwargs['smlv_somatic_bcftools_stats_fp']} \
             \
             --key_genes {kwargs['cancer_genes_fp']} \
