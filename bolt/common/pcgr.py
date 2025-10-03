@@ -361,7 +361,9 @@ def check_annotation_headers(info_field_map, vcf_fp):
         # Remove leading and trailing quotes from source
         header_src_description_unquoted = header_src_entry['Description'].strip('"')
         if header_src_description_unquoted != header_dst_entry['Description']:
-            raise AssertionError(f"Mismatch for {header_src}:\nVCF: {header_src_description_unquoted}\nExpected: {header_dst_entry['Description']}")
+            raise AssertionError(
+                f"Mismatch for {header_src}:\nVCF: {header_src_description_unquoted}\nExpected: {header_dst_entry['Description']}"
+            )
 
 def collect_pcgr_annotation_data(tsv_fp, vcf_fp, info_field_map):
     # Gather all annotations from TSV
