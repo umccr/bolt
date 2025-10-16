@@ -588,8 +588,9 @@ def run_somatic_chunck(vcf_chunks, pcgr_data_dir, vep_dir, output_dir, pcgr_outp
                     pcgr_tsv_files.append(pcgr_tsv_fp)
                 if pcgr_vcf_fp:
                     pcgr_vcf_files.append(pcgr_vcf_fp)
-            except Exception as e:
-                print(f"Exception occurred: {e}")
+            except Exception:
+                chunk_number = futures[future]
+                logger.exception(f"Exception occurred while processing PCGR chunk {chunk_number}.")
     merged_vcf_fp, merged_tsv_fp = merging_pcgr_files(output_dir, pcgr_vcf_files, pcgr_tsv_files)
     return merged_tsv_fp, merged_vcf_fp
 
