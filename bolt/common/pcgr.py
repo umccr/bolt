@@ -524,12 +524,17 @@ def annotate_record(record, annotations, *, allow_missing=False):
 
     return record
 
-def split_vcf(input_vcf, output_dir):
+def split_vcf(input_vcf, output_dir, *, max_variants=None):
     """
     Splits a VCF file into multiple chunks, each containing up to max_variants variants.
     Each chunk includes the VCF header.
     Ensures no overlapping positions between chunks.
     """
+    if max_variants is None:
+        max_variants = constants.MAX_SOMATIC_VARIANTS
+    elif max_variants <= 0:
+        raise ValueError("max_variants must be a positive integer.")
+
     output_dir = pathlib.Path(output_dir / "vcf_chunks")
     output_dir.mkdir(parents=True, exist_ok=True)
     chunk_files = []
@@ -547,7 +552,7 @@ def split_vcf(input_vcf, output_dir):
     for record in vcf_in:
         current_position = record.POS
         # Check if we need to start a new chunk
-        if variant_count >= constants.MAX_SOMATIC_VARIANTS and (last_position is None or current_position != last_position):
+        if variant_count >= max_variants and (last_position is None or current_position != last_position):
             # Close the current chunk file and start a new one
             vcf_out.close()
             chunk_number += 1
