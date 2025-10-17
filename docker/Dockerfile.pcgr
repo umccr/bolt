@@ -39,7 +39,7 @@ RUN \
 RUN \
   conda clean -afy
 
-FROM quay.io/bioconda/base-glibc-busybox-bash:2.2.5
+FROM quay.io/bioconda/base-glibc-busybox-bash:2.1.0
 
 # Copy Conda install and all environments
 COPY --from=build /opt/conda/ /opt/conda/
