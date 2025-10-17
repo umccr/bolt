@@ -154,7 +154,7 @@ def set_filter_data(record, tumor_index):
         get_record_value(
             record,
             constants.VcfInfo.GNOMAD_AF.value,
-            default=0.0 ),
+            default=0.0
         ),
         3,
     )
@@ -214,7 +214,7 @@ def set_filter_data(record, tumor_index):
 
     if (
         hmf_present is not None or
-        pcgr_hotspot_present is not None or
+        pcgr_hotspot_present or
         any(e in clinvar_clinsigs for e in constants.CLINVAR_CLINSIGS_RESCUE) or
         tcga_pancancer_count >= constants.MIN_TCGA_PANCANCER_COUNT_RESCUE
     ):
