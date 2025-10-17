@@ -1,3 +1,4 @@
+import gzip
 import pathlib
 import subprocess
 import textwrap
@@ -161,11 +162,12 @@ def split_vcf(input_vcf, output_dir):
 
 def merge_tsv_files(tsv_files, merged_tsv_fp):
     """
-    Merges all TSV files into a single TSV.
+    Merge gzipped TSV files into a single gzipped TSV.
     """
-    with open(merged_tsv_fp, 'w') as merged_tsv:
+
+    with gzip.open(merged_tsv_fp, 'wt', encoding='utf-8') as merged_tsv:
         for i, tsv_file in enumerate(tsv_files):
-            with open(tsv_file, 'r') as infile:
+            with gzip.open(tsv_file, 'rt', encoding='utf-8') as infile:
                 for line_number, line in enumerate(infile):
                     # Skip header except for the first file
                     if i > 0 and line_number == 0:
