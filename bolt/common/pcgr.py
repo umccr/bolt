@@ -348,6 +348,7 @@ def check_annotation_headers(info_field_map, vcf_fp):
     # Ensure header descriptions from source INFO annotations match those defined here for the
     # output file; force manual inspection where they do not match
     vcf_fh = cyvcf2.VCF(vcf_fp)
+    mismatches = list()
     for header_dst, header_src in info_field_map.items():
 
         # Skip header lines that do not have an equivalent entry in the PCGR/CPSR VCF
@@ -361,7 +362,15 @@ def check_annotation_headers(info_field_map, vcf_fp):
         # Remove leading and trailing quotes from source
         header_src_description_unquoted = header_src_entry['Description'].strip('"')
         if header_src_description_unquoted != header_dst_entry['Description']:
-            raise AssertionError(f"Mismatch for {header_src}:\nVCF: {header_src_description_unquoted}\nExpected: {header_dst_entry['Description']}")
+            mismatches.append(
+                f"Mismatch for {header_src}:\n"
+                f"VCF: {header_src_description_unquoted}\n"
+                f"Expected: {header_dst_entry['Description']}"
+            )
+
+    if mismatches:
+        mismatch_msg = "\n\n".join(mismatches)
+        raise AssertionError(f"Mismatched INFO annotations:\n{mismatch_msg}")
 
 def collect_pcgr_annotation_data(tsv_fp, vcf_fp, info_field_map):
     # Gather all annotations from TSV
@@ -608,7 +617,7 @@ def merging_pcgr_files(output_dir, pcgr_vcf_files, pcgr_tsv_fp):
     util.merge_tsv_files(pcgr_tsv_fp, merged_tsv_fp)
 
     # Step 5: Merge all VCF files into a single file in the pcgr directory
-    merged_vcf_path = pcgr_dir / "nosampleset.pcgr.grch38.pass.vcf.gz"
+    merged_vcf_path = pcgr_dir / "nosampleset.pcgr.grch38.pass"
     merged_vcf = util.merge_vcf_files(pcgr_vcf_files, merged_vcf_path)
 
     return merged_vcf, merged_tsv_fp
