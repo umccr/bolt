@@ -1,6 +1,6 @@
 import click
 import pathlib
-
+import logging
 
 import cyvcf2
 import logging
@@ -132,7 +132,11 @@ def set_filter_data(record, tumor_index):
     # PON filter
     ##
     # NOTE(SW): 'max' is inclusive - keeps variants with 0 to n-1 PON hits; preserved from Umccrise
-    pon_count = record.INFO.get(constants.VcfInfo.PON_COUNT.value, 0)
+    pon_count = get_record_value(
+        record,
+        constants.VcfInfo.PON_COUNT.value,
+        default=0
+    )
     if pon_count >= constants.PON_HIT_THRESHOLD:
         filters.append(constants.VcfFilter.PON)
 
@@ -147,7 +151,14 @@ def set_filter_data(record, tumor_index):
     ##
     # NOTE(SW): rounding is essential here for accurate comparison; cyvcf2 floating-point error
     # means INFO/gnomAD_AF=0.01 can be represented as 0.009999999776482582
-    gnomad_af = round(record.INFO.get(constants.VcfInfo.GNOMAD_AF.value, 0), 3)
+    gnomad_af = round(
+        get_record_value(
+            record,
+            constants.VcfInfo.GNOMAD_AF.value,
+            default=0.0
+        ),
+        3,
+    )
     if gnomad_af >= constants.MAX_GNOMAD_AF:
         filters.append(constants.VcfFilter.GNOMAD_COMMON)
 
@@ -176,7 +187,7 @@ def set_filter_data(record, tumor_index):
     # SAGE hotspot rescue
     ##
     # NOTE(SW): effectively reverts any FILTERs that may have been applied above
-    if record.INFO.get(constants.VcfInfo.SAGE_HOTSPOT.value) is not None:
+    if get_record_value(record, constants.VcfInfo.SAGE_HOTSPOT.value) is not None:
         info_rescue.append(constants.VcfInfo.SAGE_HOTSPOT_RESCUE)
 
     ##
@@ -187,13 +198,24 @@ def set_filter_data(record, tumor_index):
     # single CLINICAL_POTENTIAL_RESCUE flag
 
     # Get ClinVar clinical significance entries
-    clinvar_clinsig = record.INFO.get(constants.VcfInfo.PCGR_CLINVAR_CLASSIFICATION.value, '')
+    clinvar_clinsig = get_record_value(
+        record,
+        constants.VcfInfo.PCGR_CLINVAR_CLASSIFICATION.value,
+        default='',
+    )
     clinvar_clinsigs = clinvar_clinsig.split(',')
     # Hit counts in relevant reference somatic mutation databases
-    tcga_pancancer_count = record.INFO.get(constants.VcfInfo.PCGR_TCGA_PANCANCER_COUNT.value, 0)
+    tcga_pancancer_count = get_record_value(
+        record,
+        constants.VcfInfo.PCGR_TCGA_PANCANCER_COUNT.value,
+        default=0
+    )
+    hmf_present = get_record_value(record, constants.VcfInfo.HMF_HOTSPOT.value)
+    pcgr_hotspot_present = get_record_value(record, constants.VcfInfo.PCGR_MUTATION_HOTSPOT.value)
+
     if (
-        record.INFO.get(constants.VcfInfo.HMF_HOTSPOT.value) is not None or
-        record.INFO.get(constants.VcfInfo.PCGR_MUTATION_HOTSPOT.value) is not None or
+        hmf_present is not None or
+        pcgr_hotspot_present or
         any(e in clinvar_clinsigs for e in constants.CLINVAR_CLINSIGS_RESCUE) or
         tcga_pancancer_count >= constants.MIN_TCGA_PANCANCER_COUNT_RESCUE
     ):
@@ -230,3 +252,22 @@ def set_filter_data(record, tumor_index):
         filters_existing = [e for e in record.FILTERS if e != 'PASS']
         assert all(e not in filters_existing for e in filters_value)
         record.FILTER = ';'.join([*filters_existing, *filters_value])
+
+
+def get_record_value(record, key, *, default=None):
+    '''
+    Return a INFO value, replacing '.', '' and missing entries by default value.
+
+    This prevents placeholder values emitted by pcgr from triggering rescues
+    or filters. For example, an INFO placeholder '.' for
+    PCGR_TCGA_PANCANCER_COUNT will resolve to the integer 0 when called with
+    `get_record_value(record, 'PCGR_TCGA_PANCANCER_COUNT', default=0)`.
+    '''
+    value = record.INFO.get(key)
+    if value is None:
+        return default
+    if value=='' or value=='.':
+        return default
+    if not isinstance(value, (int, float, str)):
+        logger.error(f'record ID: {record.ID} INFO value for {key}: {value} ({type(value)}, not int, float, str)')
+    return value

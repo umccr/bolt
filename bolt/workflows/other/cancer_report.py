@@ -8,8 +8,6 @@ import logging
 from ... import util
 from ...logging_config import setup_logging
 
-logger = logging.getLogger(__name__)
-
 
 
 

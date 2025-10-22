@@ -30,6 +30,7 @@ logger = logging.getLogger(__name__)
 @click.option('--threads', required=False, default=4, type=int)
 
 @click.option('--output_dir', required=True, type=click.Path())
+@click.option('--pcgr_variant_chunk_size', required=False, type=int, help='Override maximum variants per PCGR chunk.')
 
 def entry(ctx, **kwargs):
     '''Annotate variants with information from several sources\f
@@ -99,8 +100,13 @@ def entry(ctx, **kwargs):
     print(f"Total number of variants in the input VCF: {total_variants}")
 
     # Run PCGR in chunks if exceeding the maximum allowed for somatic variants
-    if total_variants > constants.MAX_SOMATIC_VARIANTS:
-        vcf_chunks = pcgr.split_vcf(pcgr_prep_fp, output_dir)
+    chunk_size = kwargs.get('pcgr_variant_chunk_size')
+    if chunk_size is not None and chunk_size <= 0:
+        raise click.BadParameter('must be a positive integer', param_hint='--pcgr_variant_chunk_size')
+    chunk_size = chunk_size or constants.MAX_SOMATIC_VARIANTS
+
+    if total_variants > chunk_size:
+        vcf_chunks = pcgr.split_vcf(pcgr_prep_fp, output_dir, max_variants=chunk_size)
         pcgr_tsv_fp, pcgr_vcf_fp = pcgr.run_somatic_chunck(
             vcf_chunks,
             kwargs['pcgr_data_dir'],

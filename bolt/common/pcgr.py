@@ -348,6 +348,7 @@ def check_annotation_headers(info_field_map, vcf_fp):
     # Ensure header descriptions from source INFO annotations match those defined here for the
     # output file; force manual inspection where they do not match
     vcf_fh = cyvcf2.VCF(vcf_fp)
+    mismatches = list()
     for header_dst, header_src in info_field_map.items():
 
         # Skip header lines that do not have an equivalent entry in the PCGR/CPSR VCF
@@ -361,9 +362,15 @@ def check_annotation_headers(info_field_map, vcf_fp):
         # Remove leading and trailing quotes from source
         header_src_description_unquoted = header_src_entry['Description'].strip('"')
         if header_src_description_unquoted != header_dst_entry['Description']:
-            raise AssertionError(
-                f"Mismatch for {header_src}:\nVCF: {header_src_description_unquoted}\nExpected: {header_dst_entry['Description']}"
+            mismatches.append(
+                f"Mismatch for {header_src}:\n"
+                f"VCF: {header_src_description_unquoted}\n"
+                f"Expected: {header_dst_entry['Description']}"
             )
+
+    if mismatches:
+        mismatch_msg = "\n\n".join(mismatches)
+        raise AssertionError(f"Mismatched INFO annotations:\n{mismatch_msg}")
 
 def collect_pcgr_annotation_data(tsv_fp, vcf_fp, info_field_map):
     # Gather all annotations from TSV
@@ -526,12 +533,17 @@ def annotate_record(record, annotations, *, allow_missing=False):
 
     return record
 
-def split_vcf(input_vcf, output_dir):
+def split_vcf(input_vcf, output_dir, *, max_variants=None):
     """
     Splits a VCF file into multiple chunks, each containing up to max_variants variants.
     Each chunk includes the VCF header.
     Ensures no overlapping positions between chunks.
     """
+    if max_variants is None:
+        max_variants = constants.MAX_SOMATIC_VARIANTS
+    elif max_variants <= 0:
+        raise ValueError("max_variants must be a positive integer.")
+
     output_dir = pathlib.Path(output_dir / "vcf_chunks")
     output_dir.mkdir(parents=True, exist_ok=True)
     chunk_files = []
@@ -549,7 +561,7 @@ def split_vcf(input_vcf, output_dir):
     for record in vcf_in:
         current_position = record.POS
         # Check if we need to start a new chunk
-        if variant_count >= constants.MAX_SOMATIC_VARIANTS and (last_position is None or current_position != last_position):
+        if variant_count >= max_variants and (last_position is None or current_position != last_position):
             # Close the current chunk file and start a new one
             vcf_out.close()
             chunk_number += 1
@@ -590,8 +602,9 @@ def run_somatic_chunck(vcf_chunks, pcgr_data_dir, vep_dir, output_dir, pcgr_outp
                     pcgr_tsv_files.append(pcgr_tsv_fp)
                 if pcgr_vcf_fp:
                     pcgr_vcf_files.append(pcgr_vcf_fp)
-            except Exception as e:
-                print(f"Exception occurred: {e}")
+            except Exception:
+                chunk_number = futures[future]
+                logger.exception(f"Exception occurred while processing PCGR chunk {chunk_number}.")
     merged_vcf_fp, merged_tsv_fp = merging_pcgr_files(output_dir, pcgr_vcf_files, pcgr_tsv_files)
     return merged_tsv_fp, merged_vcf_fp
 
@@ -600,11 +613,11 @@ def merging_pcgr_files(output_dir, pcgr_vcf_files, pcgr_tsv_fp):
     pcgr_dir.mkdir(exist_ok=True)
 
     # Merge all TSV files into a single file in the pcgr directory
-    merged_tsv_fp = pcgr_dir / "nosampleset.pcgr_acmg.grch38.snvs_indels.tiers.tsv"
+    merged_tsv_fp = pcgr_dir / "nosampleset.pcgr_acmg.grch38.snvs_indels.tiers.tsv.gz"
     util.merge_tsv_files(pcgr_tsv_fp, merged_tsv_fp)
 
     # Step 5: Merge all VCF files into a single file in the pcgr directory
-    merged_vcf_path = pcgr_dir / "nosampleset.pcgr.grch38.pass.vcf.gz"
+    merged_vcf_path = pcgr_dir / "nosampleset.pcgr.grch38.pass"
     merged_vcf = util.merge_vcf_files(pcgr_vcf_files, merged_vcf_path)
 
     return merged_vcf, merged_tsv_fp
