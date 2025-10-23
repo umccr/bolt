@@ -288,9 +288,11 @@ VCF_HEADER_ENTRIES = {
         'MANE|MANE_SELECT|MANE_PLUS_CLINICAL|TSL|APPRIS|CCDS|ENSP|SWISSPROT|TREMBL|UNIPARC|'
         'UNIPROT_ISOFORM|RefSeq|DOMAINS|HGVS_OFFSET|gnomADe_AF|gnomADe_AFR_AF|gnomADe_AMR_AF|'
         'gnomADe_ASJ_AF|gnomADe_EAS_AF|gnomADe_FIN_AF|gnomADe_MID_AF|gnomADe_NFE_AF|'
-        'gnomADe_REMAINING_AF|gnomADe_SAS_AF|CLIN_SIG|SOMATIC|PHENO|CHECK_REF|MOTIF_NAME|'
-        'MOTIF_POS|HIGH_INF_POS|MOTIF_SCORE_CHANGE|TRANSCRIPTION_FACTORS|NearestExonJB|'
-        'MaxEntScan_alt|MaxEntScan_diff|MaxEntScan_ref'
+        'gnomADe_REMAINING_AF|gnomADe_SAS_AF|gnomADg_AF|gnomADg_AFR_AF|gnomADg_AMI_AF|'
+        'gnomADg_AMR_AF|gnomADg_ASJ_AF|gnomADg_EAS_AF|gnomADg_FIN_AF|gnomADg_MID_AF|'
+        'gnomADg_NFE_AF|gnomADg_REMAINING_AF|gnomADg_SAS_AF|CLIN_SIG|SOMATIC|PHENO|CHECK_REF|'
+        'MOTIF_NAME|MOTIF_POS|HIGH_INF_POS|MOTIF_SCORE_CHANGE|TRANSCRIPTION_FACTORS|NearestExonJB|'
+        'MaxEntScan_alt|MaxEntScan_diff|MaxaxtScan_ref'
     ),
     },
     VcfInfo.PCGR_MUTATION_HOTSPOT: {
@@ -328,16 +330,18 @@ VCF_HEADER_ENTRIES = {
         'Number': '.',
         'Type': 'String',
         'Description': (
-            'Consequence annotations from Ensembl VEP. Format: Allele|Consequence|IMPACT|SYMBOL|'
+            'Consequence annotations from Ensembl VEP. Format:Allele|Consequence|IMPACT|SYMBOL|'
             'Gene|Feature_type|Feature|BIOTYPE|EXON|INTRON|HGVSc|HGVSp|cDNA_position|CDS_position|'
             'Protein_position|Amino_acids|Codons|Existing_variation|ALLELE_NUM|DISTANCE|STRAND|'
             'FLAGS|PICK|VARIANT_CLASS|SYMBOL_SOURCE|HGNC_ID|CANONICAL|MANE|MANE_SELECT|'
             'MANE_PLUS_CLINICAL|TSL|APPRIS|CCDS|ENSP|SWISSPROT|TREMBL|UNIPARC|UNIPROT_ISOFORM|RefSeq|'
             'DOMAINS|HGVS_OFFSET|gnomADe_AF|gnomADe_AFR_AF|gnomADe_AMR_AF|gnomADe_ASJ_AF|'
             'gnomADe_EAS_AF|gnomADe_FIN_AF|gnomADe_MID_AF|gnomADe_NFE_AF|gnomADe_REMAINING_AF|'
-            'gnomADe_SAS_AF|CLIN_SIG|SOMATIC|PHENO|CHECK_REF|MOTIF_NAME|MOTIF_POS|HIGH_INF_POS|'
+            'gnomADe_SAS_AF|gnomADg_AF|gnomADg_AFR_AF|gnomADg_AMI_AF|gnomADg_AMR_AF|gnomADg_ASJ_AF|'
+            'gnomADg_EAS_AF|gnomADg_FIN_AF|gnomADg_MID_AF|gnomADg_NFE_AF|gnomADg_REMAINING_AF|'
+            'gnomADg_SAS_AF|CLI N_SIG|SOMATIC|PHENO|CHECK_REF|MOTIF_NAME|MOTIF_POS|HIGH_INF_POS|'
             'MOTIF_SCORE_CHANGE|TRANSCRIPTION_FACTORS|NearestExonJB|MaxEntScan_alt|MaxEntScan_diff|'
-            'MaxEntScan_ref'
+            'MaxaxtScan_ref'
         ),
     },
 
