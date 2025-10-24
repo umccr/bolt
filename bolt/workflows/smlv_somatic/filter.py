@@ -3,7 +3,6 @@ import pathlib
 import logging
 
 import cyvcf2
-import logging
 
 
 from ... import util
