@@ -649,7 +649,7 @@ def get_variant_filter_data(variant):
 
     # NOTE(SW): GIAB_CONF always overrides DIFFICULT tags
     if data['giab_conf'] and data['difficult']:
-        data['difficult']= False
+        data['difficult'] = False
 
 
     for impact in get_impacts(variant.INFO['PCGR_CSQ']):

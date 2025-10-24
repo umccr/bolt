@@ -69,7 +69,7 @@ def entry(ctx, **kwargs):
     )
 
     # Set other required argument values
-    batch_name = f'{kwargs["subject_name"]}_{kwargs["tumor_name"]}'
+    batch_name = f'{kwargs['subject_name']}_{kwargs['tumor_name']}'
     output_table_dir = output_dir / 'cancer_report_tables'
 
     # Optional dragen hrd argument
