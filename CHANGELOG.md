@@ -10,4 +10,4 @@
 
 - [6](https://github.com/umccr/bolt/pull/6) - Change oncoanalyser v2.0.0 uptade, with switch sv caller from GRIPSS to eSVee
 
--[9](https://github.com/umccr/bolt/pull/9) Add hypermutation sample handling
+- [9](https://github.com/umccr/bolt/pull/9) Add hypermutation sample handling
