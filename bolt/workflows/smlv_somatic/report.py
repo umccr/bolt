@@ -129,6 +129,7 @@ def entry(ctx, **kwargs):
         output_dir,
     )
 
+    pcgr_output_dir = output_dir / 'pcgr'
     pcgr.run_somatic(
         pcgr_prep_fp,
         kwargs['pcgr_data_dir'],
