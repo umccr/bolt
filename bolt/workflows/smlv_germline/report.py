@@ -1,5 +1,6 @@
 import pathlib
 import yaml
+from ...logging_config import setup_logging
 
 
 import click
@@ -22,6 +23,7 @@ from ...common import pcgr
 
 @click.option('--germline_panel_list_fp', required=True, type=click.Path(exists=True))
 @click.option('--pcgr_data_dir', required=True, type=click.Path(exists=True))
+@click.option('--vep_dir', required=True, type=click.Path(exists=True))
 
 @click.option('--threads', required=True, type=int, default=1)
 
@@ -35,6 +37,9 @@ def entry(ctx, **kwargs):
     output_dir = pathlib.Path(kwargs['output_dir'])
     output_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
 
+    # Set up logging
+    script_name = pathlib.Path(__file__).stem
+    setup_logging(output_dir, script_name)
     # BCFtools stats
     run_bcftool_stats(kwargs['vcf_unfiltered_fp'], kwargs['normal_name'], output_dir)
 
@@ -69,6 +74,7 @@ def entry(ctx, **kwargs):
         cpsr_prep_fp,
         kwargs['germline_panel_list_fp'],
         kwargs['pcgr_data_dir'],
+        kwargs['vep_dir'],
         output_dir,
         threads=kwargs['threads'],
         pcgr_conda=kwargs['pcgr_conda'],

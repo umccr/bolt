@@ -5,9 +5,12 @@ import pathlib
 import click
 import cyvcf2
 import pysam
+import logging
 
 
 from ... import util
+
+logger = logging.getLogger(__name__)
 
 
 @click.command(name='annotate')
@@ -76,7 +79,7 @@ def compile_variants(sv_fp, cnv_fp, tumor_name, ref_fp, output_dir):
 
     # SVs
     for record in sv_fh:
-        record.INFO['SOURCE'] = 'sv_gridss'
+        record.INFO['SOURCE'] = 'sv_esvee'
         output_fh.write_record(record)
 
     # CNVs
