@@ -2,6 +2,7 @@ import pathlib
 
 
 import click
+import logging
 
 
 from ... import util

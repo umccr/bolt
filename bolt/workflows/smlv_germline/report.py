@@ -4,10 +4,13 @@ from ...logging_config import setup_logging
 
 
 import click
+import logging
 
 
 from ... import util
 from ...common import pcgr
+
+logger = logging.getLogger(__name__)
 
 
 @click.command(name='report')

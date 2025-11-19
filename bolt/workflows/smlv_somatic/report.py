@@ -7,11 +7,14 @@ import pathlib
 import click
 import cyvcf2
 import yaml
+import logging
 
 
 from ... import util
 from ...common import constants
 from ...common import pcgr
+from ...logging_config import setup_logging
+logger = logging.getLogger(__name__)
 
 
 @click.command(name='report')
