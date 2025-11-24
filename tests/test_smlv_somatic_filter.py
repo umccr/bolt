@@ -46,10 +46,10 @@ def get_record_from_str(variant_str):
 
 def get_record(
     chrom='chr1',
-    pos='.',
+    pos='1',
     vid='.',
-    ref='.',
-    alt='.',
+    ref='A',
+    alt='T',
     qual='.',
     vfilter='.',
     info_data=None,
