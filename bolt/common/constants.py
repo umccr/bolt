@@ -315,6 +315,11 @@ VCF_HEADER_ENTRIES = {
         'Type': 'Integer',
         'Description': 'Raw variant count across all tumor types',
     },
+    VcfInfo.HMF_HOTSPOT: {
+        'Number': '0',
+        'Type': 'Flag',
+        'Description': 'calculated by flag of overlapping values in field HMF from annotations/hotspots/hotspots.hmf.vcf.gz',
+    },
     VcfInfo.PCGR_ICGC_PCAWG_COUNT: {
         'Number': '1',
         'Type': 'Integer',
