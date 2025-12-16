@@ -173,6 +173,9 @@ def run_somatic(input_fp, pcgr_refdata_dir, vep_dir, output_dir, chunk_nbr=None,
     if ploidy:
         command_args.append(f'--tumor_ploidy {ploidy}')
 
+    if chunk_nbr is not None:
+        command_args.append(f'--no_html')
+
     # NOTE(SW): placed here to always have output directory last
     command_args.append(f'--output_dir {output_dir}')
 
