@@ -29,7 +29,7 @@ RUN \
 
 COPY ./ /tmp/bolt/
 RUN \
-  conda run --name bolt pip install --no-deps /tmp/bolt/
+  conda run --name bolt pip install --no-cache-dir --no-deps /tmp/bolt/
 
 RUN \
   conda install bash
