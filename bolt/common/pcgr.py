@@ -557,15 +557,15 @@ def split_vcf(input_vcf, output_dir, *, max_variants=None):
 def run_somatic_chunck(vcf_chunks, pcgr_data_dir, vep_dir, output_dir, pcgr_output_dir, max_threads, pcgr_conda, pcgrr_conda):
     pcgr_tsv_files = []
     pcgr_vcf_files = []
+    
+    # Process each chunk sequentially
     for chunk_number, vcf_file in enumerate(vcf_chunks, start=1):
-        try:
-            pcgr_tsv_fp, pcgr_vcf_fp = run_somatic(vcf_file, pcgr_data_dir, vep_dir, pcgr_output_dir, chunk_number, max_threads, pcgr_conda, pcgrr_conda)
-            if pcgr_tsv_fp:
-                pcgr_tsv_files.append(pcgr_tsv_fp)
-            if pcgr_vcf_fp:
-                pcgr_vcf_files.append(pcgr_vcf_fp)
-        except Exception:
-            logger.exception(f"Exception occurred while processing PCGR chunk {chunk_number}.")
+        pcgr_tsv_fp, pcgr_vcf_fp = run_somatic(vcf_file, pcgr_data_dir, vep_dir, pcgr_output_dir, chunk_number, max_threads, pcgr_conda, pcgrr_conda)
+        if pcgr_tsv_fp:
+            pcgr_tsv_files.append(pcgr_tsv_fp)
+        if pcgr_vcf_fp:
+            pcgr_vcf_files.append(pcgr_vcf_fp)
+    
     merged_vcf_fp, merged_tsv_fp = merging_pcgr_files(output_dir, pcgr_vcf_files, pcgr_tsv_files)
     return merged_tsv_fp, merged_vcf_fp
 
