@@ -22,6 +22,10 @@ def get_project_root():
 
 
 def execute_command(command, log_file_path=None):
+    # Wrap command with proper error handling
+    # set -e: exit on error, -u: exit on unset variable, -o pipefail: pipeline fails if any command fails
+    prepared_command = f'set -euo pipefail; {textwrap.dedent(command)}'
+    
     logger.info("Executing command: %s", command.strip())
 
     # Open the log file if provided
@@ -29,7 +33,7 @@ def execute_command(command, log_file_path=None):
 
     # Launch process with combined stdout and stderr streams, and line buffering enabled.
     process = subprocess.Popen(
-        command,
+        prepared_command,
         shell=True,
         executable='/bin/bash',
         stdout=subprocess.PIPE,
@@ -61,17 +65,16 @@ def execute_command(command, log_file_path=None):
         command=command
     )
 
+    # Raise exception on non-zero return code
+    if result.returncode != 0:
+        error_msg = f"Command failed with return code {result.returncode}: {command.strip()}"
+        logger.error(error_msg)
+        raise subprocess.CalledProcessError(result.returncode, command, output=''.join(output_lines))
+
     return result
 
-def command_prepare(command):
-    return f'set -o pipefail; {textwrap.dedent(command)}'
-
 def count_vcf_records(fp):
-    result = subprocess.run(f'bcftools view -H {fp} | wc -l',
-                            shell=True,
-                            executable="/bin/bash",
-                            capture_output=True,
-                            text=True )
+    result = execute_command(f'bcftools view -H {fp} | wc -l')
     return int(result.stdout.strip())
 
 
