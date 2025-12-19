@@ -31,6 +31,10 @@ def execute_command(command, log_file_path=None):
     # Open the log file if provided
     log_file = log_file_path.open('a', encoding='utf-8') if log_file_path else None
 
+    # Set environment to suppress bash libtinfo.so.6 warnings
+    env = subprocess.os.environ.copy()
+    env['BASH_SILENCE_DEPRECATION_WARNING'] = '1'
+
     # Launch process with combined stdout and stderr streams, and line buffering enabled.
     process = subprocess.Popen(
         prepared_command,
@@ -40,7 +44,8 @@ def execute_command(command, log_file_path=None):
         stderr=subprocess.STDOUT,
         text=True,
         encoding='utf-8',
-        bufsize=1  # line buffered
+        bufsize=1,  # line buffered
+        env=env
     )
 
     output_lines = []
@@ -48,11 +53,13 @@ def execute_command(command, log_file_path=None):
     with process.stdout:
         for line in iter(process.stdout.readline, ''):
             if line:
-                logger.info(line.strip())
-                output_lines.append(line)
-                if log_file:
-                    log_file.write(line)
-                    log_file.flush()  # flush immediately for real-time logging
+                # Filter out bash libtinfo.so.6 warnings
+                if 'libtinfo.so.6: no version information available' not in line:
+                    logger.info(line.strip())
+                    output_lines.append(line)
+                    if log_file:
+                        log_file.write(line)
+                        log_file.flush()  # flush immediately for real-time logging
     process.wait()  # wait for the process to complete
 
     if log_file:
