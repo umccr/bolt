@@ -8,7 +8,6 @@ import re
 import shutil
 import tempfile
 import logging
-import concurrent.futures
 
 import cyvcf2
 
