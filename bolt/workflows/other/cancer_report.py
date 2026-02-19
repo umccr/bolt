@@ -116,7 +116,7 @@ def entry(ctx, **kwargs):
             \
             --img_dir {output_image_dir}/ \
             --result_outdir {output_table_dir}/ \
-            --out_file {output_dir}/{kwargs["tumor_name"]}.cancer_report.html
+            --out_file {output_dir}/{kwargs['tumor_name']}.cancer_report.html
     '''
     util.execute_command(command)
 
