@@ -227,7 +227,10 @@ VCF_HEADER_ENTRIES = {
     },
 
     VcfFilter.PCGR_COUNT_LIMIT: {
-        'Description': 'Manually filtered to meet PCGR 500,000 variant limit',
+        'Description': (
+            f'Manually filtered to {MAX_SOMATIC_VARIANTS} variants to stay below the '
+            'PCGR 500,000 variant limit'
+        ),
     },
 
     # INFO
@@ -279,21 +282,21 @@ VCF_HEADER_ENTRIES = {
     },
     VcfInfo.PCGR_CSQ: {
         'Number': '.',
-    'Type': 'String',
-    'Description': (
-        'Consequence annotations from Ensembl VEP. Format: '
-        'Allele|Consequence|IMPACT|SYMBOL|Gene|Feature_type|Feature|BIOTYPE|EXON|INTRON|HGVSc|'
-        'HGVSp|cDNA_position|CDS_position|Protein_position|Amino_acids|Codons|Existing_variation|'
-        'ALLELE_NUM|DISTANCE|STRAND|FLAGS|PICK|VARIANT_CLASS|SYMBOL_SOURCE|HGNC_ID|CANONICAL|'
-        'MANE|MANE_SELECT|MANE_PLUS_CLINICAL|TSL|APPRIS|CCDS|ENSP|SWISSPROT|TREMBL|UNIPARC|'
-        'UNIPROT_ISOFORM|RefSeq|DOMAINS|HGVS_OFFSET|gnomADe_AF|gnomADe_AFR_AF|gnomADe_AMR_AF|'
-        'gnomADe_ASJ_AF|gnomADe_EAS_AF|gnomADe_FIN_AF|gnomADe_MID_AF|gnomADe_NFE_AF|'
-        'gnomADe_REMAINING_AF|gnomADe_SAS_AF|gnomADg_AF|gnomADg_AFR_AF|gnomADg_AMI_AF|'
-        'gnomADg_AMR_AF|gnomADg_ASJ_AF|gnomADg_EAS_AF|gnomADg_FIN_AF|gnomADg_MID_AF|'
-        'gnomADg_NFE_AF|gnomADg_REMAINING_AF|gnomADg_SAS_AF|CLIN_SIG|SOMATIC|PHENO|CHECK_REF|'
-        'MOTIF_NAME|MOTIF_POS|HIGH_INF_POS|MOTIF_SCORE_CHANGE|TRANSCRIPTION_FACTORS|NearestExonJB|'
-        'MaxEntScan_alt|MaxEntScan_diff|MaxEntScan_ref'
-    ),
+        'Type': 'String',
+        'Description': (
+            'Consequence annotations from Ensembl VEP. Format: '
+            'Allele|Consequence|IMPACT|SYMBOL|Gene|Feature_type|Feature|BIOTYPE|EXON|INTRON|HGVSc|'
+            'HGVSp|cDNA_position|CDS_position|Protein_position|Amino_acids|Codons|Existing_variation|'
+            'ALLELE_NUM|DISTANCE|STRAND|FLAGS|PICK|VARIANT_CLASS|SYMBOL_SOURCE|HGNC_ID|CANONICAL|'
+            'MANE|MANE_SELECT|MANE_PLUS_CLINICAL|TSL|APPRIS|CCDS|ENSP|SWISSPROT|TREMBL|UNIPARC|'
+            'UNIPROT_ISOFORM|RefSeq|DOMAINS|HGVS_OFFSET|gnomADe_AF|gnomADe_AFR_AF|gnomADe_AMR_AF|'
+            'gnomADe_ASJ_AF|gnomADe_EAS_AF|gnomADe_FIN_AF|gnomADe_MID_AF|gnomADe_NFE_AF|'
+            'gnomADe_REMAINING_AF|gnomADe_SAS_AF|gnomADg_AF|gnomADg_AFR_AF|gnomADg_AMI_AF|'
+            'gnomADg_AMR_AF|gnomADg_ASJ_AF|gnomADg_EAS_AF|gnomADg_FIN_AF|gnomADg_MID_AF|'
+            'gnomADg_NFE_AF|gnomADg_REMAINING_AF|gnomADg_SAS_AF|CLIN_SIG|SOMATIC|PHENO|CHECK_REF|'
+            'MOTIF_NAME|MOTIF_POS|HIGH_INF_POS|MOTIF_SCORE_CHANGE|TRANSCRIPTION_FACTORS|NearestExonJB|'
+            'MaxEntScan_alt|MaxEntScan_diff|MaxEntScan_ref'
+        ),
     },
     VcfInfo.PCGR_MUTATION_HOTSPOT: {
         'Number': '.',

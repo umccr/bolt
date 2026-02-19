@@ -113,8 +113,7 @@ def annotate_existing_sage_calls(input_fp, tumor_name, sage_vcf_fp, output_dir):
     # Get input file handle
     input_fh = cyvcf2.VCF(input_fp)
 
-    # Get input file handle
-    # Perform consistency check on the VCF header
+    # Define expected SAGE annotations used for VCF header consistency check
     info_field_map_sage = {
         constants.VcfInfo.SAGE_HOTSPOT: 'SAGE_HOTSPOT',
         constants.VcfInfo.SAGE_NOVEL: 'SAGE_NOVEL',

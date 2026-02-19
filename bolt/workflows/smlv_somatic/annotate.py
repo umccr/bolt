@@ -107,7 +107,7 @@ def entry(ctx, **kwargs):
 
     if total_variants > chunk_size:
         vcf_chunks = pcgr.split_vcf(pcgr_prep_fp, output_dir, max_variants=chunk_size)
-        pcgr_tsv_fp, pcgr_vcf_fp = pcgr.run_somatic_chunck(
+        pcgr_tsv_fp, pcgr_vcf_fp = pcgr.run_somatic_chunk(
             vcf_chunks,
             kwargs['pcgr_data_dir'],
             kwargs['vep_dir'],

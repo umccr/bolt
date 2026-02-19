@@ -265,7 +265,7 @@ def get_record_value(record, key, *, default=None):
     value = record.INFO.get(key)
     if value is None:
         return default
-    if value=='' or value=='.':
+    if value == '' or value == '.':
         return default
     if not isinstance(value, (int, float, str)):
         logger.error(f'record ID: {record.ID} INFO value for {key}: {value} ({type(value)}, not int, float, str)')

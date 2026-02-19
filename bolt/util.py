@@ -31,9 +31,8 @@ def execute_command(command, log_file_path=None):
     # Open the log file if provided
     log_file = log_file_path.open('a', encoding='utf-8') if log_file_path else None
 
-    # Set environment to suppress bash libtinfo.so.6 warnings
+    # Prepare environment for subprocess (inherit current environment)
     env = subprocess.os.environ.copy()
-    env['BASH_SILENCE_DEPRECATION_WARNING'] = '1'
 
     # Launch process with combined stdout and stderr streams, and line buffering enabled.
     process = subprocess.Popen(
@@ -276,7 +275,7 @@ def check_annotation_headers(info_field_map, vcf_fp):
         # Remove leading and trailing quotes from source
         header_src_description_unquoted = header_src_entry['Description'].strip('"')
         try:
-            assert  header_src_description_unquoted == header_dst_entry['Description']
+            assert header_src_description_unquoted == header_dst_entry['Description']
         except AssertionError:
             print(f'Header description mismatch for {header_dst.value}')
             print(f'  src: {header_src_description_unquoted}')

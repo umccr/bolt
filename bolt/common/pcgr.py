@@ -1,4 +1,4 @@
-import collections
+
 import csv
 import functools
 import gzip
@@ -553,7 +553,7 @@ def split_vcf(input_vcf, output_dir, *, max_variants=None):
     logger.info(f"VCF file split into {len(chunk_files)} chunks.")
     return chunk_files
 
-def run_somatic_chunck(vcf_chunks, pcgr_data_dir, vep_dir, output_dir, pcgr_output_dir, max_threads, pcgr_conda, pcgrr_conda):
+def run_somatic_chunk(vcf_chunks, pcgr_data_dir, vep_dir, output_dir, pcgr_output_dir, max_threads, pcgr_conda, pcgrr_conda):
     pcgr_tsv_files = []
     pcgr_vcf_files = []
     
