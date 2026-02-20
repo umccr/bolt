@@ -4,7 +4,7 @@ import enum
 ######################################
 ## Variation selection (annotation) ##
 ######################################
-MAX_SOMATIC_VARIANTS = 500_000
+MAX_SOMATIC_VARIANTS = 450_000
 MAX_SOMATIC_VARIANTS_GNOMAD_FILTER = 0.01
 
 
@@ -35,10 +35,47 @@ CLINVAR_CLINSIGS_RESCUE = {
     'pathogenic',
     'uncertain_significance',
 }
-PCGR_TIERS_RESCUE = {
+PCGR_ACTIONABILITY_TIER_RESCUE = {
+    '1',
+    '2',
+}
+
+
+################################
+## Hypermutated report filter ##
+################################
+PCGR_TIERS_FILTERING = (
     'TIER_1',
     'TIER_2',
-}
+    'TIER_3',
+    'TIER_4',
+    'NONCODING',
+)
+
+VEP_IMPACTS_FILTER = (
+    'intergenic',
+    'intronic',
+    'downstream',
+    'upstream',
+    'impacts_other',
+)
+
+GENOMIC_REGIONS_FILTERING = (
+    'difficult',
+    'none',
+    'giab_conf',
+)
+
+HOTSPOT_FIELDS_FILTERING = (
+    'SAGE_HOTSPOT',
+    'hotspot',
+    'PCGR_MUTATION_HOTSPOT',
+)
+
+RETAIN_FIELDS_FILTERING = (
+    'PANEL',
+    *HOTSPOT_FIELDS_FILTERING,
+)
 
 
 ##################################################
@@ -61,6 +98,8 @@ class VcfFilter(enum.Enum):
     ENCODE = 'ENCODE'
     GNOMAD_COMMON = 'gnomAD_common'
 
+    PCGR_COUNT_LIMIT = 'PCGR_count_limit'
+
     @property
     def namespace(self):
         return 'FILTER'
@@ -77,16 +116,14 @@ class VcfInfo(enum.Enum):
     SAGE_NOVEL = 'SAGE_NOVEL'
     SAGE_RESCUE = 'SAGE_RESCUE'
 
-    PCGR_TIER = 'PCGR_TIER'
+    PCGR_ACTIONABILITY_TIER = 'PCGR_ACTIONABILITY_TIER'
     PCGR_CSQ = 'PCGR_CSQ'
     PCGR_MUTATION_HOTSPOT = 'PCGR_MUTATION_HOTSPOT'
-    PCGR_CLINVAR_CLNSIG = 'PCGR_CLINVAR_CLNSIG'
+    PCGR_CLINVAR_CLASSIFICATION = 'PCGR_CLINVAR_CLASSIFICATION'
     PCGR_COSMIC_COUNT = 'PCGR_COSMIC_COUNT'
     PCGR_TCGA_PANCANCER_COUNT = 'PCGR_TCGA_PANCANCER_COUNT'
     PCGR_ICGC_PCAWG_COUNT = 'PCGR_ICGC_PCAWG_COUNT'
 
-    CPSR_FINAL_CLASSIFICATION = 'CPSR_FINAL_CLASSIFICATION'
-    CPSR_PATHOGENICITY_SCORE = 'CPSR_PATHOGENICITY_SCORE'
     CPSR_CLINVAR_CLASSIFICATION = 'CPSR_CLINVAR_CLASSIFICATION'
     CPSR_CSQ = 'CPSR_CSQ'
 
@@ -112,7 +149,7 @@ class VcfInfo(enum.Enum):
 
     GNOMAD_AF = 'gnomAD_AF'
 
-    PCGR_TIER_RESCUE = 'PCGR_TIER_RESCUE'
+    PCGR_ACTIONABILITY_TIER_RESCUE = 'PCGR_ACTIONABILITY_TIER_RESCUE'
     SAGE_HOTSPOT_RESCUE = 'SAGE_HOTSPOT_RESCUE'
     CLINICAL_POTENTIAL_RESCUE = 'CLINICAL_POTENTIAL_RESCUE'
 
@@ -120,6 +157,8 @@ class VcfInfo(enum.Enum):
 
     RESCUED_FILTERS_EXISTING = 'RESCUED_FILTERS_EXISTING'
     RESCUED_FILTERS_PENDING = 'RESCUED_FILTERS_PENDING'
+
+    PANEL = 'PANEL'
 
     @property
     def namespace(self):
@@ -187,6 +226,12 @@ VCF_HEADER_ENTRIES = {
         'Description': f'gnomAD AF >= {MAX_GNOMAD_AF}',
     },
 
+    VcfFilter.PCGR_COUNT_LIMIT: {
+        'Description': (
+            f'Manually filtered to {MAX_SOMATIC_VARIANTS} variants to stay below the '
+            'PCGR 500,000 variant limit'
+        ),
+    },
 
     # INFO
     VcfInfo.TUMOR_AF: {
@@ -226,7 +271,7 @@ VCF_HEADER_ENTRIES = {
         'Description': 'Variant rescued by a matching SAGE call',
     },
 
-    VcfInfo.PCGR_TIER: {
+    VcfInfo.PCGR_ACTIONABILITY_TIER: {
         'Number': '1',
         'Type': 'String',
         'Description': (
@@ -239,26 +284,29 @@ VCF_HEADER_ENTRIES = {
         'Number': '.',
         'Type': 'String',
         'Description': (
-            'Consequence annotations from Ensembl VEP. Format: Allele|Consequence|IMPACT|SYMBOL|'
-            'Gene|Feature_type|Feature|BIOTYPE|EXON|INTRON|HGVSc|HGVSp|cDNA_position|'
-            'CDS_position|Protein_position|Amino_acids|Codons|Existing_variation|ALLELE_NUM|'
-            'DISTANCE|STRAND|FLAGS|PICK|VARIANT_CLASS|SYMBOL_SOURCE|HGNC_ID|CANONICAL|'
-            'MANE_SELECT|MANE_PLUS_CLINICAL|TSL|APPRIS|CCDS|ENSP|SWISSPROT|TREMBL|UNIPARC|'
-            'UNIPROT_ISOFORM|RefSeq|DOMAINS|HGVS_OFFSET|AF|AFR_AF|AMR_AF|EAS_AF|EUR_AF|SAS_AF|'
-            'gnomAD_AF|gnomAD_AFR_AF|gnomAD_AMR_AF|gnomAD_ASJ_AF|gnomAD_EAS_AF|gnomAD_FIN_AF|'
-            'gnomAD_NFE_AF|gnomAD_OTH_AF|gnomAD_SAS_AF|CLIN_SIG|SOMATIC|PHENO|CHECK_REF|'
-            'NearestExonJB'
+            'Consequence annotations from Ensembl VEP. Format: '
+            'Allele|Consequence|IMPACT|SYMBOL|Gene|Feature_type|Feature|BIOTYPE|EXON|INTRON|HGVSc|'
+            'HGVSp|cDNA_position|CDS_position|Protein_position|Amino_acids|Codons|Existing_variation|'
+            'ALLELE_NUM|DISTANCE|STRAND|FLAGS|PICK|VARIANT_CLASS|SYMBOL_SOURCE|HGNC_ID|CANONICAL|'
+            'MANE|MANE_SELECT|MANE_PLUS_CLINICAL|TSL|APPRIS|CCDS|ENSP|SWISSPROT|TREMBL|UNIPARC|'
+            'UNIPROT_ISOFORM|RefSeq|DOMAINS|HGVS_OFFSET|gnomADe_AF|gnomADe_AFR_AF|gnomADe_AMR_AF|'
+            'gnomADe_ASJ_AF|gnomADe_EAS_AF|gnomADe_FIN_AF|gnomADe_MID_AF|gnomADe_NFE_AF|'
+            'gnomADe_REMAINING_AF|gnomADe_SAS_AF|gnomADg_AF|gnomADg_AFR_AF|gnomADg_AMI_AF|'
+            'gnomADg_AMR_AF|gnomADg_ASJ_AF|gnomADg_EAS_AF|gnomADg_FIN_AF|gnomADg_MID_AF|'
+            'gnomADg_NFE_AF|gnomADg_REMAINING_AF|gnomADg_SAS_AF|CLIN_SIG|SOMATIC|PHENO|CHECK_REF|'
+            'MOTIF_NAME|MOTIF_POS|HIGH_INF_POS|MOTIF_SCORE_CHANGE|TRANSCRIPTION_FACTORS|NearestExonJB|'
+            'MaxEntScan_alt|MaxEntScan_diff|MaxEntScan_ref'
         ),
     },
     VcfInfo.PCGR_MUTATION_HOTSPOT: {
         'Number': '.',
         'Type': 'String',
-        'Description': 'Known cancer mutation hotspot, as found in cancerhotspots.org_v2, Gene|Codon|Q-value',
+        'Description': 'Known cancer mutation hotspot, as found in cancerhotspots.org. Format: GeneSymbol|Entrez_ID|CodonRefAA|Alt_AA|Q-value',
     },
-    VcfInfo.PCGR_CLINVAR_CLNSIG: {
+    VcfInfo.PCGR_CLINVAR_CLASSIFICATION: {
         'Number': '.',
         'Type': 'String',
-        'Description': 'ClinVar clinical significance',
+        'Description': 'ClinVar - Overall clinical significance of variant on a five-tiered scale',
     },
     VcfInfo.PCGR_COSMIC_COUNT: {
         'Number': '1',
@@ -270,44 +318,27 @@ VCF_HEADER_ENTRIES = {
         'Type': 'Integer',
         'Description': 'Raw variant count across all tumor types',
     },
+    VcfInfo.HMF_HOTSPOT: {
+        'Number': '0',
+        'Type': 'Flag',
+        'Description': 'calculated by flag of overlapping values in field HMF from annotations/hotspots/hotspots.hmf.vcf.gz',
+    },
     VcfInfo.PCGR_ICGC_PCAWG_COUNT: {
         'Number': '1',
         'Type': 'Integer',
         'Description': 'Count of ICGC PCAWG hits',
     },
 
-    VcfInfo.CPSR_FINAL_CLASSIFICATION: {
-        'Number': '1',
-        'Type': 'String',
-        'Description': (
-            'Final variant classification based on the combination of CLINVAR_CLASSIFICTION (for '
-            'ClinVar-classified variants), and CPSR_CLASSIFICATION (for novel variants)'
-        ),
-    },
-    VcfInfo.CPSR_PATHOGENICITY_SCORE: {
-        'Number': '1',
-        'Type': 'Float',
-        'Description': 'Aggregated CPSR pathogenicity score',
-    },
     VcfInfo.CPSR_CLINVAR_CLASSIFICATION: {
         'Number': '1',
         'Type': 'String',
-        'Description': 'Clinical significance of variant on a five-tiered scale',
+        'Description': 'ClinVar - Overall clinical significance of variant on a five-tiered scale',
     },
     VcfInfo.CPSR_CSQ: {
         'Number': '.',
         'Type': 'String',
         'Description': (
-            'Consequence annotations from Ensembl VEP. Format: Allele|Consequence|IMPACT|SYMBOL|'
-            'Gene|Feature_type|Feature|BIOTYPE|EXON|INTRON|HGVSc|HGVSp|cDNA_position|CDS_position|'
-            'Protein_position|Amino_acids|Codons|Existing_variation|ALLELE_NUM|DISTANCE|STRAND|'
-            'FLAGS|PICK|VARIANT_CLASS|SYMBOL_SOURCE|HGNC_ID|CANONICAL|MANE_SELECT|'
-            'MANE_PLUS_CLINICAL|APPRIS|CCDS|ENSP|SWISSPROT|TREMBL|UNIPARC|UNIPROT_ISOFORM|RefSeq|'
-            'DOMAINS|HGVS_OFFSET|AF|AFR_AF|AMR_AF|EAS_AF|EUR_AF|SAS_AF|gnomAD_AF|gnomAD_AFR_AF|'
-            'gnomAD_AMR_AF|gnomAD_ASJ_AF|gnomAD_EAS_AF|gnomAD_FIN_AF|gnomAD_NFE_AF|gnomAD_OTH_AF|'
-            'gnomAD_SAS_AF|CLIN_SIG|SOMATIC|PHENO|CHECK_REF|MOTIF_NAME|MOTIF_POS|HIGH_INF_POS|'
-            'MOTIF_SCORE_CHANGE|TRANSCRIPTION_FACTORS|NearestExonJB|LoF|LoF_filter|LoF_flags|'
-            'LoF_info'
+            'Consequence annotations from Ensembl VEP. Format: Allele|Consequence|IMPACT|SYMBOL|Gene|Feature_type|Feature|BIOTYPE|EXON|INTRON|HGVSc|HGVSp|cDNA_position|CDS_position|Protein_position|Amino_acids|Codons|Existing_variation|ALLELE_NUM|DISTANCE|STRAND|FLAGS|PICK|VARIANT_CLASS|SYMBOL_SOURCE|HGNC_ID|CANONICAL|MANE|MANE_SELECT|MANE_PLUS_CLINICAL|TSL|APPRIS|CCDS|ENSP|SWISSPROT|TREMBL|UNIPARC|UNIPROT_ISOFORM|RefSeq|DOMAINS|HGVS_OFFSET|gnomADe_AF|gnomADe_AFR_AF|gnomADe_AMR_AF|gnomADe_ASJ_AF|gnomADe_EAS_AF|gnomADe_FIN_AF|gnomADe_MID_AF|gnomADe_NFE_AF|gnomADe_REMAINING_AF|gnomADe_SAS_AF|gnomADg_AF|gnomADg_AFR_AF|gnomADg_AMI_AF|gnomADg_AMR_AF|gnomADg_ASJ_AF|gnomADg_EAS_AF|gnomADg_FIN_AF|gnomADg_MID_AF|gnomADg_NFE_AF|gnomADg_REMAINING_AF|gnomADg_SAS_AF|CLIN_SIG|SOMATIC|PHENO|CHECK_REF|MOTIF_NAME|MOTIF_POS|HIGH_INF_POS|MOTIF_SCORE_CHANGE|TRANSCRIPTION_FACTORS|NearestExonJB|MaxEntScan_alt|MaxEntScan_diff|MaxEntScan_ref'
         ),
     },
 
@@ -316,7 +347,7 @@ VCF_HEADER_ENTRIES = {
         'Type': 'Flag',
         'Description': '',
     },
-    VcfInfo.PCGR_TIER_RESCUE: {
+    VcfInfo.PCGR_ACTIONABILITY_TIER_RESCUE: {
         'Number': '0',
         'Type': 'Flag',
         'Description': '',
@@ -345,9 +376,15 @@ VCF_HEADER_ENTRIES = {
     },
 
     VcfInfo.RESCUED_FILTERS_PENDING: {
-        'Number': '1',
+        'Number': '.',
         'Type': 'String',
         'Description': 'Filters pending prior to variant rescue',
+    },
+
+    VcfInfo.PANEL: {
+        'Number': '0',
+        'Type': 'Flag',
+        'Description': 'UMCCR somatic panel CDS (2,000 bp padding)',
     },
 
 
@@ -368,13 +405,11 @@ VCF_HEADER_ENTRIES = {
         'Description': 'Approximate read depth (reads with MQ=255 or with bad mates are filtered)',
     },
     VcfFormat.SAGE_SB: {
-        'Number': '1',
+        'Number': '2',
         'Type': 'Float',
-        'Description': 'Strand bias - percentage of first-in-pair reads',
+        'Description': 'Fragment strand bias - percentage of forward-orientation fragments (ref,alt)',
     },
 }
-
-
 #####################
 ##      Other      ##
 #####################

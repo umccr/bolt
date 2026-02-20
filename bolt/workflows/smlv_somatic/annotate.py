@@ -1,14 +1,13 @@
+import logging
 import pathlib
-
-
 import click
 import cyvcf2
-
 
 from ... import util
 from ...common import constants
 from ...common import pcgr
-
+from ...logging_config import setup_logging
+logger = logging.getLogger(__name__)
 
 @click.command(name='annotate')
 @click.pass_context
@@ -23,6 +22,7 @@ from ...common import pcgr
 @click.option('--pon_dir', required=True, type=click.Path(exists=True))
 
 @click.option('--pcgr_data_dir', required=True, type=click.Path(exists=True))
+@click.option('--vep_dir', required=True, type=click.Path(exists=True))
 
 @click.option('--pcgr_conda', required=False, type=str)
 @click.option('--pcgrr_conda', required=False, type=str)
@@ -30,6 +30,7 @@ from ...common import pcgr
 @click.option('--threads', required=False, default=4, type=int)
 
 @click.option('--output_dir', required=True, type=click.Path())
+@click.option('--pcgr_variant_chunk_size', required=False, type=int, help='Override maximum variants per PCGR chunk.')
 
 def entry(ctx, **kwargs):
     '''Annotate variants with information from several sources\f
@@ -43,6 +44,9 @@ def entry(ctx, **kwargs):
     # Create output directory
     output_dir = pathlib.Path(kwargs['output_dir'])
     output_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
+
+    script_name = pathlib.Path(__file__).stem
+    setup_logging(output_dir, script_name)
 
     # Set all FILTER="." to FILTER="PASS" as required by PURPLE
     filter_pass_fp = set_filter_pass(kwargs['vcf_fp'], kwargs['tumor_name'], output_dir)
@@ -73,55 +77,67 @@ def entry(ctx, **kwargs):
     )
 
     # Annotate with cancer-related and functional information from a range of sources using PCGR
-    #   - Select variants to process - there is an upper limit for PCGR of around 500k
     #   - Set tumor and normal AF and DP in INFO for PCGR and remove all other annotations
     #   - Run PCGR on minimal VCF (pcgr_prep_fp)
     #   - Transfer selected PCGR annotations to unfiltered VCF (selected_fp)
     #       - PCGR ACMG TIER [INFO/PCGR_TIER]
     #       - VEP consequence [INFO/PCR_CSQ]
     #       - Known mutation hotspot [INFO/PCGR_MUTATION_HOTSPOT]
-    #       - ClinVar clinical significant [INFO/PCGR_CLINVAR_CLNSIG]
-    #       - Hits in COSMIC [INFO/PCGR_COSMIC_COUNT]
+    #       - ClinVar clinical significant [INFO/PCGR_CLNSIG]
     #       - Hits in TCGA [INFO/PCGR_TCGA_PANCANCER_COUNT]
     #       - Hits in PCAWG [INFO/PCGR_ICGC_PCAWG_COUNT]
-    # Set selected data or full input
-    selection_data = select_variants(
-        pon_fp,
-        kwargs['tumor_name'],
-        kwargs['cancer_genes_fp'],
-        output_dir,
-    )
-
-    if not (pcgr_prep_input_fp := selection_data.get('filtered')):
-        pcgr_prep_input_fp = selection_data['selected']
 
     # Prepare VCF for PCGR annotation
     pcgr_prep_fp = pcgr.prepare_vcf_somatic(
-        pcgr_prep_input_fp,
+        pon_fp,
         kwargs['tumor_name'],
         kwargs['normal_name'],
         output_dir,
     )
 
-    # Run PCGR
-    pcgr_dir = pcgr.run_somatic(
-        pcgr_prep_fp,
-        kwargs['pcgr_data_dir'],
-        output_dir,
-        threads=kwargs['threads'],
-        pcgr_conda=kwargs['pcgr_conda'],
-        pcgrr_conda=kwargs['pcgrr_conda'],
-    )
+    pcgr_output_dir = output_dir / 'pcgr'
+    total_variants = util.count_vcf_records(pcgr_prep_fp)
+    print(f"Total number of variants in the input VCF: {total_variants}")
+
+    # Run PCGR in chunks if exceeding the maximum allowed for somatic variants
+    chunk_size = kwargs.get('pcgr_variant_chunk_size')
+    if chunk_size is not None and chunk_size <= 0:
+        raise click.BadParameter('must be a positive integer', param_hint='--pcgr_variant_chunk_size')
+    chunk_size = chunk_size or constants.MAX_SOMATIC_VARIANTS
+
+    if total_variants > chunk_size:
+        vcf_chunks = pcgr.split_vcf(pcgr_prep_fp, output_dir, max_variants=chunk_size)
+        pcgr_tsv_fp, pcgr_vcf_fp = pcgr.run_somatic_chunk(
+            vcf_chunks,
+            kwargs['pcgr_data_dir'],
+            kwargs['vep_dir'],
+            output_dir,
+            pcgr_output_dir,
+            kwargs['threads'],
+            kwargs['pcgr_conda'],
+            kwargs['pcgrr_conda'],
+        )
+    else:
+        pcgr_tsv_fp, pcgr_vcf_fp = pcgr.run_somatic(
+            pcgr_prep_fp,
+            kwargs['pcgr_data_dir'],
+            kwargs['vep_dir'],
+            pcgr_output_dir,
+            chunk_nbr=None,
+            threads=kwargs['threads'],
+            pcgr_conda=kwargs['pcgr_conda'],
+            pcgrr_conda=kwargs['pcgrr_conda'],
+        )
 
     # Transfer PCGR annotations to full set of variants
     pcgr.transfer_annotations_somatic(
-        selection_data['selected'],
+        pon_fp,
         kwargs['tumor_name'],
-        selection_data.get('filter_name'),
-        pcgr_dir,
+        pcgr_vcf_fp,
+        pcgr_tsv_fp,
         output_dir,
     )
-
+    logger.info("Annotation process completed")
 
 def set_filter_pass(input_fp, tumor_name, output_dir):
     output_fp = output_dir / f'{tumor_name}.set_filter_pass.vcf.gz'
@@ -135,7 +151,6 @@ def set_filter_pass(input_fp, tumor_name, output_dir):
         output_fh.write_record(record)
 
     return output_fp
-
 
 def general_annotations(input_fp, tumor_name, threads, annotations_dir, output_dir):
     toml_fp = pathlib.Path(annotations_dir) / 'vcfanno_annotations.toml'
@@ -168,7 +183,6 @@ def panel_of_normal_annotations(input_fp, tumor_name, threads, pon_dir, output_d
 
     util.execute_command(command)
     return output_fp
-
 
 def select_variants(input_fp, tumor_name, cancer_genes_fp, output_dir):
     # Exclude variants until we hopefully move the needle below the threshold
