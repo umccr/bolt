@@ -2,6 +2,8 @@
 
 ## dev
 
+- [28](https://github.com/umccr/bolt/pull/28) - gpgr version bump to 2.2.12 for cancer report hypermutated flag fix
+
 - [17](https://github.com/umccr/bolt/pull/17) - change dragen HRD file optional
 
 - [14](https://github.com/umccr/bolt/pull/14) - gpgr version bump to 2.2.0
