@@ -19,9 +19,9 @@ RUN \
   conda install --prefix /env/ git
 
 RUN \
-  conda run --prefix /env/ pip install setuptools && \
   conda run --prefix /env/ pip install 'multiqc ==1.15' && \
-  conda run --prefix /env/ pip install 'git+https://github.com/umccr/multiqc_template@v0.0.3'
+  conda run --prefix /env/ pip install 'git+https://github.com/umccr/multiqc_template@v0.0.3' && \
+  conda run --prefix /env/ pip install 'setuptools<70'
 
 COPY ./ /tmp/bolt/
 RUN \
