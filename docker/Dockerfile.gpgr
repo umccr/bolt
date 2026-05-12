@@ -24,6 +24,11 @@ RUN \
     'bioconductor-txdb.hsapiens.ucsc.hg38.knowngene ==3.16.0' \
     'bioconductor-genomeinfodbdata ==1.2.9'
 
+# DEV: override r-gpgr with branch version — revert to conda pin before release
+RUN \
+  conda run --prefix /env/ Rscript -e \
+    "remotes::install_github('umccr/gpgr@input-sigrap-data', upgrade='never')"
+
 COPY ./ /tmp/bolt/
 RUN \
   conda run --prefix /env/ pip install --no-deps /tmp/bolt/
