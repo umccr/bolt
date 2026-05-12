@@ -378,7 +378,7 @@ def select_pcgr_variants(vcf_fp, cancer_genes_fp, tumor_name, output_dir):
     fh_in = cyvcf2.VCF(vcf_fp)
     util.add_vcf_header_entry(fh_in, constants.VcfFilter.PCGR_COUNT_LIMIT)
 
-    # Additional VCF with all records for traceability
+    # NOTE(SW): creating an additional VCF with all records for traceability
     fp_out = output_dir / f'{tumor_name}.pcgr_hypermutated.pass.vcf.gz'
     fp_set_out = output_dir / f'{tumor_name}.pcgr_hypermutated.filters_set.vcf.gz'
 
