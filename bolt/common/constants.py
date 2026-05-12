@@ -44,12 +44,14 @@ PCGR_ACTIONABILITY_TIER_RESCUE = {
 ################################
 ## Hypermutated report filter ##
 ################################
+# Values match short forms written by transfer_annotations_somatic() ('1'=TIER_1, ..., 'N'=NONCODING).
+# Order is lowest clinical priority first: NONCODING dropped before TIER_1.
 PCGR_TIERS_FILTERING = (
-    'TIER_1',
-    'TIER_2',
-    'TIER_3',
-    'TIER_4',
-    'NONCODING',
+    'N',
+    '4',
+    '3',
+    '2',
+    '1',
 )
 
 VEP_IMPACTS_FILTER = (
