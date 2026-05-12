@@ -116,8 +116,13 @@ def get_minimal_header(input_fh):
     return '\n'.join([filetype_line, *chrom_lines, *format_lines, column_line])
 
 
-def run_somatic(input_fp, pcgr_refdata_dir, vep_dir, output_dir, chunk_nbr=None, threads=1, pcgr_conda=None, pcgrr_conda=None, purity=None, ploidy=None, sample_id=None):
+def run_somatic(input_fp, pcgr_refdata_dir, vep_dir, output_dir, chunk_nbr=None, threads=1, pcgr_threads=4, pcgr_conda=None, pcgrr_conda=None, purity=None, ploidy=None, sample_id=None, disable_estimates=False):
+    # threads: Nextflow process-level resource allocation (not wired to PCGR internals)
+    # pcgr_threads: PCGR-internal concurrency (vcfanno workers + VEP forks)
 
+    pcgr_threads = max(1, int(pcgr_threads))
+    vcfanno_threads = pcgr_threads
+    vep_forks = min(8, max(2, pcgr_threads))
 
     output_dir = output_dir / f"pcgr_{chunk_nbr}" if chunk_nbr is not None else output_dir
 
@@ -142,11 +147,9 @@ def run_somatic(input_fp, pcgr_refdata_dir, vep_dir, output_dir, chunk_nbr=None,
         f'--control_af_tag NORMAL_AF',
         f'--genome_assembly grch38',
         f'--assay WGS',
-        f'--estimate_signatures',
-        f'--estimate_msi',
-        f'--estimate_tmb',
-        f'--vcfanno_n_proc 4',
-        f'--vep_n_forks 4',
+        *([] if disable_estimates else ['--estimate_signatures', '--estimate_msi', '--estimate_tmb']),
+        f'--vcfanno_n_proc {vcfanno_threads}',
+        f'--vep_n_forks {vep_forks}',
         f'--vep_pick_order biotype,rank,appris,tsl,ccds,canonical,length,mane_plus_clinical,mane_select',
     ]
 
@@ -211,7 +214,9 @@ def run_somatic(input_fp, pcgr_refdata_dir, vep_dir, output_dir, chunk_nbr=None,
     return pcgr_tsv_fp, pcgr_vcf_fp
 
 
-def run_germline(input_fp, panel_fp, pcgr_refdata_dir, vep_dir, output_dir, threads=1, pcgr_conda=None, pcgrr_conda=None, sample_id=None):
+def run_germline(input_fp, panel_fp, pcgr_refdata_dir, vep_dir, output_dir, threads=1, pcgr_threads=4, pcgr_conda=None, pcgrr_conda=None, sample_id=None):
+    # threads: Nextflow process-level resource allocation (not wired to CPSR internals)
+    # pcgr_threads: CPSR-internal concurrency (vcfanno workers)
 
     if not sample_id:
         sample_id = 'nosampleset'
@@ -238,7 +243,7 @@ def run_germline(input_fp, panel_fp, pcgr_refdata_dir, vep_dir, output_dir, thre
         f'--custom_list_name umccr_germline_panel',
         f'--pop_gnomad global',
         f'--classify_all',
-        f'--vcfanno_n_proc {threads}',
+        f'--vcfanno_n_proc {pcgr_threads}',
         f'--vep_pick_order biotype,rank,appris,tsl,ccds,canonical,length,mane_plus_clinical,mane_select',
     ]
 
@@ -568,13 +573,13 @@ def run_somatic_chunk(vcf_chunks, pcgr_data_dir, vep_dir, output_dir, pcgr_outpu
     merged_vcf_fp, merged_tsv_fp = merging_pcgr_files(output_dir, pcgr_vcf_files, pcgr_tsv_files)
     return merged_tsv_fp, merged_vcf_fp
 
-def merging_pcgr_files(output_dir, pcgr_vcf_files, pcgr_tsv_fp):
+def merging_pcgr_files(output_dir, pcgr_vcf_files, pcgr_tsv_files):
     pcgr_dir = pathlib.Path(output_dir) / 'pcgr'
     pcgr_dir.mkdir(exist_ok=True)
 
     # Merge all TSV files into a single file in the pcgr directory
     merged_tsv_fp = pcgr_dir / "nosampleset.pcgr_acmg.grch38.snvs_indels.tiers.tsv.gz"
-    util.merge_tsv_files(pcgr_tsv_fp, merged_tsv_fp)
+    util.merge_tsv_files(pcgr_tsv_files, merged_tsv_fp)
 
     # Step 5: Merge all VCF files into a single file in the pcgr directory
     merged_vcf_path = pcgr_dir / "nosampleset.pcgr.grch38.pass"

@@ -1,0 +1,327 @@
+"""Tests for hypermutated sample handling — tier ordering fix and variant trimming."""
+import pathlib
+import shutil
+import tempfile
+import unittest
+from unittest.mock import patch
+
+import cyvcf2
+
+import bolt.common.constants as constants
+import bolt.common.pcgr as pcgr
+import bolt.util as util
+import bolt.workflows.smlv_somatic.report as report_mod
+
+
+# Minimal CSQ: only tokens[1] (consequence) is read by get_impacts()
+def _csq(consequence):
+    return f'A|{consequence}|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.'
+
+
+# Minimal VCF header with all INFO fields used by select_pcgr_variants
+HEADER = (
+    '##fileformat=VCFv4.2\n'
+    '##FILTER=<ID=PASS,Description="All filters passed">\n'
+    '##INFO=<ID=PCGR_ACTIONABILITY_TIER,Number=1,Type=String,Description="">\n'
+    '##INFO=<ID=PCGR_CSQ,Number=.,Type=String,Description="">\n'
+    '##INFO=<ID=HMF_HOTSPOT,Number=0,Type=Flag,Description="">\n'
+    '##INFO=<ID=PCGR_MUTATION_HOTSPOT,Number=.,Type=String,Description="">\n'
+    '##INFO=<ID=SAGE_HOTSPOT,Number=0,Type=Flag,Description="">\n'
+    '##INFO=<ID=PANEL,Number=0,Type=Flag,Description="">\n'
+    '##INFO=<ID=GIAB_CONF,Number=0,Type=Flag,Description="">\n'
+    '##INFO=<ID=DIFFICULT_segdup,Number=0,Type=Flag,Description="">\n'
+    '##contig=<ID=chr1,length=248956422>\n'
+    '#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n'
+)
+
+
+def _write_vcf(path, variants):
+    with open(path, 'w') as fh:
+        fh.write(HEADER)
+        for pos, info in variants:
+            fh.write(f'chr1\t{pos}\t.\tA\tT\t.\tPASS\t{info}\n')
+
+
+def _count_vcf(fp):
+    return sum(1 for _ in cyvcf2.VCF(str(fp)))
+
+
+def _make_variant(info_str):
+    """Return a cyvcf2 Variant built from info_str using the test VCF header."""
+    with tempfile.TemporaryDirectory() as tmp:
+        vcf_path = pathlib.Path(tmp) / 'test.vcf'
+        _write_vcf(vcf_path, [(100, info_str)])
+        return list(cyvcf2.VCF(str(vcf_path)))[0]
+
+
+class TestTierOrdering(unittest.TestCase):
+    """Verify the PCGR_TIERS_FILTERING fix: values and priority order."""
+
+    def test_noncoding_filtered_before_tier1(self):
+        """N (NONCODING) entries must all precede '1' (TIER_1) entries in get_ordering()."""
+        ordering = pcgr.get_ordering()
+        tiers = [key[0] for key in ordering]
+        n_idx = [i for i, t in enumerate(tiers) if t == 'N']
+        t1_idx = [i for i, t in enumerate(tiers) if t == '1']
+        self.assertTrue(n_idx, 'No NONCODING (N) entries in get_ordering()')
+        self.assertTrue(t1_idx, 'No TIER_1 (1) entries in get_ordering()')
+        self.assertLess(max(n_idx), min(t1_idx),
+                        'All NONCODING entries must precede all TIER_1 entries')
+
+    def test_no_long_form_tier_values(self):
+        """PCGR_TIERS_FILTERING must use short forms ('1'-'4', 'N'), not 'TIER_1' etc."""
+        for v in constants.PCGR_TIERS_FILTERING:
+            self.assertNotIn('TIER_', v,
+                             f"Found long-form tier value '{v}' — must be short form")
+
+    def test_priority_order(self):
+        """Full ordering: N before 4 before 3 before 2 before 1."""
+        expected = ('N', '4', '3', '2', '1')
+        self.assertEqual(constants.PCGR_TIERS_FILTERING, expected)
+
+
+class TestSelectPcgrVariants(unittest.TestCase):
+    """Integration tests for select_pcgr_variants() trimming logic."""
+
+    def _run(self, variants, limit, tmp):
+        """Run select_pcgr_variants with a small MAX_SOMATIC_VARIANTS limit."""
+        vcf_fp = pathlib.Path(tmp) / 'input.vcf'
+        _write_vcf(vcf_fp, variants)
+        cancer_genes = pathlib.Path(tmp) / 'genes.bed'
+        cancer_genes.write_text('chr1\t1\t9999999\n')
+
+        # Mock bcftools annotate: copy input to the expected output path
+        orig_execute = util.execute_command
+        def fake_execute(cmd, **_):
+            import re
+            m = re.search(r'--output\s+(\S+)', cmd)
+            if m and 'bcftools annotate' in cmd:
+                shutil.copy(str(vcf_fp), m.group(1))
+            else:
+                orig_execute(cmd)
+
+        with patch('bolt.common.constants.MAX_SOMATIC_VARIANTS', limit), \
+             patch('bolt.util.execute_command', side_effect=fake_execute):
+            out_fp = report_mod.select_pcgr_variants(
+                vcf_fp, cancer_genes, 'TUMOR', pathlib.Path(tmp)
+            )
+        return _count_vcf(out_fp)
+
+    def test_output_within_limit(self):
+        """Output must never exceed MAX_SOMATIC_VARIANTS."""
+        with tempfile.TemporaryDirectory() as tmp:
+            # 15 variants: 2 hotspot + 5 TIER_1 + 5 TIER_3 + 3 NONCODING
+            v = []
+            for i in range(1, 3):    # hotspot
+                v.append((i*10, f'HMF_HOTSPOT;PCGR_ACTIONABILITY_TIER=1;PCGR_CSQ={_csq("intron_variant")}'))
+            for i in range(3, 8):    # TIER_1 intronic
+                v.append((i*10, f'PCGR_ACTIONABILITY_TIER=1;PCGR_CSQ={_csq("intron_variant")}'))
+            for i in range(8, 13):   # TIER_3 intronic
+                v.append((i*10, f'PCGR_ACTIONABILITY_TIER=3;PCGR_CSQ={_csq("intron_variant")}'))
+            for i in range(13, 16):  # NONCODING intergenic
+                v.append((i*10, f'PCGR_ACTIONABILITY_TIER=N;PCGR_CSQ={_csq("intergenic_variant")}'))
+            count = self._run(v, limit=10, tmp=tmp)
+            self.assertLessEqual(count, 10)
+
+    def test_noncoding_dropped_before_tier1(self):
+        """With limit = total - 3, the 3 NONCODING variants should be dropped (not TIER_1)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            v = []
+            for i in range(1, 6):   # 5 TIER_1 intronic
+                v.append((i*10, f'PCGR_ACTIONABILITY_TIER=1;PCGR_CSQ={_csq("intron_variant")}'))
+            for i in range(6, 9):   # 3 NONCODING intergenic
+                v.append((i*10, f'PCGR_ACTIONABILITY_TIER=N;PCGR_CSQ={_csq("intergenic_variant")}'))
+            # limit=5: should drop the 3 NONCODING to get to 5
+            count = self._run(v, limit=5, tmp=tmp)
+            self.assertEqual(count, 5)
+
+    def test_hotspots_never_dropped_by_tiered_filter(self):
+        """Hotspot variants must survive tiered filtering.
+
+        Note: HMF_HOTSPOT is not in RETAIN_FIELDS_FILTERING — these variants survive because
+        they are TIER_1 (highest priority), not via the hotspot retention path.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            v = []
+            for i in range(1, 3):   # 2 HMF_HOTSPOT TIER_1 variants (survive via tier priority)
+                v.append((i*10, f'HMF_HOTSPOT;PCGR_ACTIONABILITY_TIER=1;PCGR_CSQ={_csq("intron_variant")}'))
+            for i in range(3, 13):  # 10 NONCODING (should all be filtered)
+                v.append((i*10, f'PCGR_ACTIONABILITY_TIER=N;PCGR_CSQ={_csq("intergenic_variant")}'))
+            # limit=2: only the 2 TIER_1 variants should remain
+            count = self._run(v, limit=2, tmp=tmp)
+            self.assertEqual(count, 2)
+
+    def test_all_within_limit_nothing_filtered(self):
+        """When total variants are below the limit, nothing is dropped."""
+        with tempfile.TemporaryDirectory() as tmp:
+            v = [(i*10, f'PCGR_ACTIONABILITY_TIER=N;PCGR_CSQ={_csq("intergenic_variant")}')
+                 for i in range(1, 6)]  # 5 NONCODING
+            count = self._run(v, limit=10, tmp=tmp)
+            self.assertEqual(count, 5)
+
+    def test_retained_variants_bypass_tiered_filter(self):
+        """Variants with PANEL or SAGE_HOTSPOT bypass tiered filtering and always survive."""
+        with tempfile.TemporaryDirectory() as tmp:
+            v = []
+            for i in range(1, 3):   # 2 SAGE_HOTSPOT
+                v.append((i*10, 'SAGE_HOTSPOT'))
+            for i in range(3, 5):   # 2 PANEL-only
+                v.append((i*10, 'PANEL'))
+            for i in range(5, 15):  # 10 NONCODING that get dropped
+                v.append((i*10, f'PCGR_ACTIONABILITY_TIER=N;PCGR_CSQ={_csq("intergenic_variant")}'))
+            count = self._run(v, limit=4, tmp=tmp)
+            self.assertEqual(count, 4)
+
+    def test_filters_set_vcf_marks_dropped_variants(self):
+        """The traceability VCF marks filtered-out variants with PCGR_count_limit.
+
+        The function drops entire categories, so we need two distinct categories:
+        - 3 TIER_1 intronic (high priority — kept)
+        - 2 NONCODING intergenic (lowest priority — dropped as a whole category)
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = pathlib.Path(tmp)
+            vcf_fp = tmp_path / 'input.vcf'
+            v = []
+            for i in range(1, 4):   # 3 TIER_1 intronic — kept
+                v.append((i*10, f'PCGR_ACTIONABILITY_TIER=1;PCGR_CSQ={_csq("intron_variant")}'))
+            for i in range(4, 6):   # 2 NONCODING intergenic — dropped whole category
+                v.append((i*10, f'PCGR_ACTIONABILITY_TIER=N;PCGR_CSQ={_csq("intergenic_variant")}'))
+            _write_vcf(vcf_fp, v)
+            cancer_genes = tmp_path / 'genes.bed'
+            cancer_genes.write_text('chr1\t1\t9999999\n')
+
+            orig_execute = util.execute_command
+            def fake_execute(cmd, **_):
+                import re
+                m = re.search(r'--output\s+(\S+)', cmd)
+                if m and 'bcftools annotate' in cmd:
+                    shutil.copy(str(vcf_fp), m.group(1))
+                else:
+                    orig_execute(cmd)
+
+            # limit=3: the 2 NONCODING category is dropped, 3 TIER_1 survive
+            with patch('bolt.common.constants.MAX_SOMATIC_VARIANTS', 3), \
+                 patch('bolt.util.execute_command', side_effect=fake_execute):
+                report_mod.select_pcgr_variants(vcf_fp, cancer_genes, 'TUMOR', tmp_path)
+
+            filters_set_fp = tmp_path / 'TUMOR.pcgr_hypermutated.filters_set.vcf.gz'
+            self.assertTrue(filters_set_fp.exists(), 'filters_set VCF not created')
+
+            all_records = list(cyvcf2.VCF(str(filters_set_fp)))
+            self.assertEqual(len(all_records), 5, 'filters_set VCF should contain all input variants')
+
+            filter_tag = constants.VcfFilter.PCGR_COUNT_LIMIT.value
+            dropped = [r for r in all_records if filter_tag in (r.FILTERS or [])]
+            self.assertEqual(len(dropped), 2, 'Expected 2 NONCODING variants marked with PCGR_count_limit')
+
+
+class TestGetImpacts(unittest.TestCase):
+    """Unit tests for pcgr.get_impacts() — CSQ string parsing."""
+
+    def test_single_consequence(self):
+        csq = _csq('intron_variant')
+        self.assertEqual(pcgr.get_impacts(csq), {'intron_variant'})
+
+    def test_multi_consequences_ampersand(self):
+        """A single CSQ entry with two consequences joined by & returns both."""
+        csq = _csq('intron_variant&upstream_gene_variant')
+        self.assertEqual(pcgr.get_impacts(csq), {'intron_variant', 'upstream_gene_variant'})
+
+    def test_multiple_csq_entries_union(self):
+        """Comma-separated CSQ entries — returns the union of all consequences."""
+        csq = f'{_csq("intron_variant")},{_csq("intergenic_variant")}'
+        self.assertEqual(pcgr.get_impacts(csq), {'intron_variant', 'intergenic_variant'})
+
+
+class TestDetermineFilter(unittest.TestCase):
+    """Unit tests for pcgr.determine_filter() — filter category determination."""
+
+    def _data(self, **overrides):
+        base = {
+            'tier': None,
+            'difficult': False,
+            'giab_conf': False,
+            'intergenic': None,
+            'intronic': None,
+            'downstream': None,
+            'upstream': None,
+            'impacts_other': None,
+        }
+        base.update(overrides)
+        return base
+
+    def test_intergenic_difficult(self):
+        data = self._data(intergenic=True, difficult=True)
+        self.assertEqual(pcgr.determine_filter(data), ('intergenic', 'difficult'))
+
+    def test_intergenic_no_region(self):
+        data = self._data(intergenic=True, difficult=False, giab_conf=False)
+        self.assertEqual(pcgr.determine_filter(data), ('intergenic', 'none'))
+
+    def test_intergenic_giab_conf(self):
+        data = self._data(intergenic=True, giab_conf=True)
+        self.assertEqual(pcgr.determine_filter(data), ('intergenic', 'giab_conf'))
+
+    def test_intronic_supersedes_intergenic(self):
+        """When both intergenic and intronic are present, intronic wins (higher priority)."""
+        data = self._data(intergenic=True, intronic=True, difficult=True)
+        self.assertEqual(pcgr.determine_filter(data), ('intronic', 'difficult'))
+
+    def test_impacts_other_highest_priority(self):
+        """impacts_other is the last to be filtered — it wins over all other impacts."""
+        data = self._data(
+            intergenic=True, intronic=True, downstream=True,
+            upstream=True, impacts_other=True, difficult=True,
+        )
+        self.assertEqual(pcgr.determine_filter(data), ('impacts_other', 'difficult'))
+
+    def test_no_impact_returns_false(self):
+        """A variant with no recognisable impact cannot be categorised."""
+        data = self._data()  # all impacts None
+        self.assertFalse(pcgr.determine_filter(data))
+
+    def test_giab_conf_region(self):
+        data = self._data(impacts_other=True, giab_conf=True)
+        self.assertEqual(pcgr.determine_filter(data), ('impacts_other', 'giab_conf'))
+
+
+class TestGetVariantFilterData(unittest.TestCase):
+    """Unit tests for pcgr.get_variant_filter_data() — data extraction from VCF records."""
+
+    def test_tier_extracted(self):
+        info = f'PCGR_ACTIONABILITY_TIER=2;PCGR_CSQ={_csq("intron_variant")}'
+        data = pcgr.get_variant_filter_data(_make_variant(info))
+        self.assertEqual(data['tier'], '2')
+
+    def test_intergenic_impact(self):
+        info = f'PCGR_ACTIONABILITY_TIER=N;PCGR_CSQ={_csq("intergenic_variant")}'
+        data = pcgr.get_variant_filter_data(_make_variant(info))
+        self.assertTrue(data['intergenic'])
+        self.assertFalse(data['intronic'])
+        self.assertFalse(data['downstream'])
+        self.assertFalse(data['upstream'])
+        self.assertFalse(data['impacts_other'])
+
+    def test_intronic_impact(self):
+        info = f'PCGR_ACTIONABILITY_TIER=1;PCGR_CSQ={_csq("intron_variant")}'
+        data = pcgr.get_variant_filter_data(_make_variant(info))
+        self.assertTrue(data['intronic'])
+        self.assertFalse(data['intergenic'])
+
+    def test_giab_conf_overrides_difficult(self):
+        """GIAB_CONF flag must clear the difficult flag even when DIFFICULT_* is also present."""
+        info = f'GIAB_CONF;DIFFICULT_segdup;PCGR_ACTIONABILITY_TIER=1;PCGR_CSQ={_csq("intron_variant")}'
+        data = pcgr.get_variant_filter_data(_make_variant(info))
+        self.assertTrue(data['giab_conf'])
+        self.assertFalse(data['difficult'])
+
+    def test_difficult_without_giab(self):
+        info = f'DIFFICULT_segdup;PCGR_ACTIONABILITY_TIER=1;PCGR_CSQ={_csq("intron_variant")}'
+        data = pcgr.get_variant_filter_data(_make_variant(info))
+        self.assertTrue(data['difficult'])
+        self.assertFalse(data['giab_conf'])
+
+
+if __name__ == '__main__':
+    unittest.main()
