@@ -323,5 +323,45 @@ class TestGetVariantFilterData(unittest.TestCase):
         self.assertFalse(data['giab_conf'])
 
 
+class TestSplitVcf(unittest.TestCase):
+    """Tests for pcgr.split_vcf() — chunking the annotation path for large VCFs.
+
+    split_vcf() is the annotate-path strategy for hypermutated samples: it divides
+    a VCF into ≤MAX_SOMATIC_VARIANTS chunks so each chunk can be run through PCGR
+    independently. Tested 2026-05-13 with a synthetic 550k VCF: 550k → 450k + 100k.
+    """
+
+    def test_chunks_above_limit(self):
+        """VCF exceeding the limit is split into correctly-sized chunks."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = pathlib.Path(tmp)
+            vcf_fp = tmp_path / 'input.vcf'
+            # 25 variants, limit=10 → expect 3 chunks (10, 10, 5)
+            v = [(i * 10, f'PCGR_CSQ={_csq("intron_variant")}') for i in range(1, 26)]
+            _write_vcf(vcf_fp, v)
+
+            with patch('bolt.common.constants.MAX_SOMATIC_VARIANTS', 10):
+                chunks = pcgr.split_vcf(vcf_fp, tmp_path)
+
+            self.assertEqual(len(chunks), 3)
+            counts = [_count_vcf(c) for c in chunks]
+            self.assertLessEqual(max(counts), 10)
+            self.assertEqual(sum(counts), 25)
+
+    def test_no_chunking_within_limit(self):
+        """VCF within the limit produces a single chunk containing all variants."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = pathlib.Path(tmp)
+            vcf_fp = tmp_path / 'input.vcf'
+            v = [(i * 10, f'PCGR_CSQ={_csq("intron_variant")}') for i in range(1, 6)]
+            _write_vcf(vcf_fp, v)
+
+            with patch('bolt.common.constants.MAX_SOMATIC_VARIANTS', 10):
+                chunks = pcgr.split_vcf(vcf_fp, tmp_path)
+
+            self.assertEqual(len(chunks), 1)
+            self.assertEqual(_count_vcf(chunks[0]), 5)
+
+
 if __name__ == '__main__':
     unittest.main()
