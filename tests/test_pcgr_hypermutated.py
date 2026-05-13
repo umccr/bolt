@@ -363,5 +363,52 @@ class TestSplitVcf(unittest.TestCase):
             self.assertEqual(_count_vcf(chunks[0]), 5)
 
 
+class TestRunSomaticChunkArgMapping(unittest.TestCase):
+    """Regression test: run_somatic_chunk must forward args as keywords to run_somatic.
+
+    Before the fix, run_somatic_chunk called run_somatic positionally (6 args),
+    skipping pcgr_threads. This caused pcgr_conda ('pcgr') to land in the
+    pcgr_threads slot → ValueError: invalid literal for int() with base 10: 'pcgr'.
+    """
+
+    def test_pcgr_conda_not_shifted_into_pcgr_threads(self):
+        """pcgr_conda must reach run_somatic as pcgr_conda, not as pcgr_threads."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = pathlib.Path(tmp)
+            vcf_fp = tmp_path / 'chunk.vcf'
+            _write_vcf(vcf_fp, [(10, f'PCGR_CSQ={_csq("intron_variant")}')])
+
+            captured = {}
+
+            def fake_run_somatic(*args, **kwargs):
+                captured['args'] = args
+                captured['kwargs'] = kwargs
+                return (None, None)
+
+            with patch('bolt.common.pcgr.run_somatic', side_effect=fake_run_somatic), \
+                 patch('bolt.common.pcgr.merging_pcgr_files',
+                       return_value=(tmp_path / 'out.vcf', tmp_path / 'out.tsv')):
+                pcgr.run_somatic_chunk(
+                    [vcf_fp],
+                    pcgr_data_dir=tmp_path / 'pcgr_data',
+                    vep_dir=tmp_path / 'vep',
+                    output_dir=tmp_path,
+                    pcgr_output_dir=tmp_path / 'pcgr_output',
+                    max_threads=4,
+                    pcgr_conda='pcgr_env',
+                    pcgrr_conda='pcgrr_env',
+                )
+
+            kw = captured['kwargs']
+            self.assertEqual(kw.get('pcgr_conda'), 'pcgr_env',
+                             'pcgr_conda was not forwarded — likely shifted into pcgr_threads')
+            self.assertEqual(kw.get('pcgrr_conda'), 'pcgrr_env',
+                             'pcgrr_conda was not forwarded correctly')
+            self.assertEqual(kw.get('threads'), 4,
+                             'threads (max_threads) was not forwarded correctly')
+            self.assertEqual(kw.get('chunk_nbr'), 1,
+                             'chunk_nbr was not forwarded correctly')
+
+
 if __name__ == '__main__':
     unittest.main()
