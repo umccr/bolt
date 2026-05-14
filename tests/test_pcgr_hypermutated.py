@@ -410,5 +410,100 @@ class TestRunSomaticChunkArgMapping(unittest.TestCase):
                              'chunk_nbr was not forwarded correctly')
 
 
+class TestCountVariantProcess(unittest.TestCase):
+    """Verify count_variant_process counts and is_hypermutated flag (bolt #27).
+
+    is_hypermutated must use the 'dragen' count (raw, pre-bolt-filter), not
+    'filter_pass'. A sample with many DRAGEN variants that are mostly filtered
+    away must still be flagged as hypermutated.
+    """
+
+    # Minimal header for count_variant_process: needs FILTER tags + SAGE_NOVEL INFO
+    COUNT_HEADER = (
+        '##fileformat=VCFv4.2\n'
+        '##FILTER=<ID=PASS,Description="All filters passed">\n'
+        f'##FILTER=<ID={constants.VcfFilter.MIN_AF.value},Description="">\n'
+        f'##FILTER=<ID={constants.VcfFilter.PON.value},Description="">\n'
+        f'##FILTER=<ID={constants.VcfFilter.MAX_VARIANTS_NON_PASS.value},Description="">\n'
+        f'##INFO=<ID={constants.VcfInfo.SAGE_NOVEL.value},Number=0,Type=Flag,Description="">\n'
+        f'##INFO=<ID={constants.VcfInfo.RESCUED_FILTERS_EXISTING.value},Number=1,Type=String,Description="">\n'
+        '##contig=<ID=chr1,length=248956422>\n'
+        '#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n'
+    )
+
+    def _write_count_vcf(self, path, rows):
+        """rows: list of (pos, filter_str, info_str) tuples."""
+        with open(path, 'w') as fh:
+            fh.write(self.COUNT_HEADER)
+            for pos, filt, info in rows:
+                fh.write(f'chr1\t{pos}\t.\tA\tT\t.\t{filt}\t{info}\n')
+
+    def test_is_hypermutated_uses_dragen_count(self):
+        """is_hypermutated=True when dragen count > MAX_SOMATIC_VARIANTS even if filter_pass is below."""
+        with tempfile.TemporaryDirectory() as tmp:
+            vcf_fp = pathlib.Path(tmp) / 'test.vcf'
+            min_af = constants.VcfFilter.MIN_AF.value
+            # 3 DRAGEN PASS variants + 2 filtered by bolt (MIN_AF) — filter_pass=3, dragen=5
+            rows = [(i * 10, 'PASS', '.') for i in range(1, 4)]
+            rows += [(i * 10 + 5, min_af, '.') for i in range(1, 3)]
+            self._write_count_vcf(vcf_fp, rows)
+
+            with patch('bolt.common.constants.MAX_SOMATIC_VARIANTS', 4):
+                counts = report_mod.count_variant_process(vcf_fp)
+
+            self.assertEqual(counts['dragen'], 5)
+            self.assertEqual(counts['filter_pass'], 3)
+            # dragen(5) > MAX(4) → hypermutated, even though filter_pass(3) ≤ MAX(4)
+            self.assertTrue(counts['is_hypermutated'])
+
+    def test_is_hypermutated_false_when_dragen_within_limit(self):
+        """is_hypermutated=False when dragen count ≤ MAX_SOMATIC_VARIANTS."""
+        with tempfile.TemporaryDirectory() as tmp:
+            vcf_fp = pathlib.Path(tmp) / 'test.vcf'
+            rows = [(i * 10, 'PASS', '.') for i in range(1, 4)]
+            self._write_count_vcf(vcf_fp, rows)
+
+            with patch('bolt.common.constants.MAX_SOMATIC_VARIANTS', 10):
+                counts = report_mod.count_variant_process(vcf_fp)
+
+            self.assertEqual(counts['dragen'], 3)
+            self.assertFalse(counts['is_hypermutated'])
+
+    def test_sage_novel_excluded_from_dragen_count(self):
+        """SAGE_NOVEL variants are not counted as DRAGEN variants."""
+        with tempfile.TemporaryDirectory() as tmp:
+            vcf_fp = pathlib.Path(tmp) / 'test.vcf'
+            sage_novel_info = constants.VcfInfo.SAGE_NOVEL.value
+            rows = [
+                (10, 'PASS', '.'),              # dragen
+                (20, 'PASS', sage_novel_info),  # sage novel — not dragen
+                (30, 'PASS', '.'),              # dragen
+            ]
+            self._write_count_vcf(vcf_fp, rows)
+
+            with patch('bolt.common.constants.MAX_SOMATIC_VARIANTS', 100):
+                counts = report_mod.count_variant_process(vcf_fp)
+
+            self.assertEqual(counts['dragen'], 2)
+            self.assertEqual(counts['sage'], 3)
+
+    def test_annotation_filter_excluded_from_annotated_count(self):
+        """Variants with bolt annotation filters are excluded from annotated count."""
+        with tempfile.TemporaryDirectory() as tmp:
+            vcf_fp = pathlib.Path(tmp) / 'test.vcf'
+            annot_filter = constants.VcfFilter.MAX_VARIANTS_NON_PASS.value
+            rows = [
+                (10, 'PASS', '.'),          # annotated
+                (20, annot_filter, '.'),    # not annotated (bolt annotation filter)
+            ]
+            self._write_count_vcf(vcf_fp, rows)
+
+            with patch('bolt.common.constants.MAX_SOMATIC_VARIANTS', 100):
+                counts = report_mod.count_variant_process(vcf_fp)
+
+            self.assertEqual(counts['annotated'], 1)
+            self.assertEqual(counts['dragen'], 2)
+
+
 if __name__ == '__main__':
     unittest.main()
