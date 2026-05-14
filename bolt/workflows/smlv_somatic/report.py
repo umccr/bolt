@@ -301,7 +301,7 @@ def count_variant_process(vcf_fp):
         if not record.FILTER or rescued_filters:
             counts['filter_pass'] += 1
 
-    counts['is_hypermutated'] = counts['filter_pass'] > constants.MAX_SOMATIC_VARIANTS
+    counts['is_hypermutated'] = counts['dragen'] > constants.MAX_SOMATIC_VARIANTS
     return counts
 
 
