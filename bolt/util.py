@@ -1,5 +1,6 @@
 import gzip
 import pathlib
+import select
 import subprocess
 import sys
 import textwrap
@@ -22,62 +23,68 @@ def get_project_root():
 
 
 def execute_command(command, log_file_path=None):
-    # Wrap command with proper error handling
     # set -e: exit on error, -u: exit on unset variable, -o pipefail: pipeline fails if any command fails
     prepared_command = f'set -euo pipefail; {textwrap.dedent(command)}'
-    
     logger.info("Executing command: %s", command.strip())
 
-    # Open the log file if provided
-    log_file = log_file_path.open('a', encoding='utf-8') if log_file_path else None
-
-    # Prepare environment for subprocess (inherit current environment)
-    env = subprocess.os.environ.copy()
-
-    # Launch process with combined stdout and stderr streams, and line buffering enabled.
     process = subprocess.Popen(
         prepared_command,
         shell=True,
         executable='/bin/bash',
         stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
+        stderr=subprocess.PIPE,
         text=True,
         encoding='utf-8',
         bufsize=1,  # line buffered
-        env=env
     )
 
-    output_lines = []
-    # Iterate over each line as it becomes available
-    with process.stdout:
-        for line in iter(process.stdout.readline, ''):
-            if line:
-                # Filter out bash libtinfo.so.6 warnings
-                if 'libtinfo.so.6: no version information available' not in line:
-                    logger.info(line.strip())
-                    output_lines.append(line)
-                    if log_file:
-                        log_file.write(line)
-                        log_file.flush()  # flush immediately for real-time logging
-    process.wait()  # wait for the process to complete
+    stdout_lines = []
+    stderr_lines = []
+    stream_map = {
+        process.stdout: (stdout_lines, logger.info),
+        process.stderr: (stderr_lines, logger.warning),
+    }
+    open_streams = set(stream_map)
+    log_file = log_file_path.open('a', encoding='utf-8') if log_file_path else None
 
-    if log_file:
-        log_file.close()
+    try:
+        # select multiplexes stdout and stderr in a single thread, preserving arrival order
+        # and preventing pipe buffer deadlock without threading races on log_file writes
+        while open_streams:
+            readable, _, _ = select.select(open_streams, [], [])
+            for stream in readable:
+                line = stream.readline()
+                if line:
+                    # Filter out bash libtinfo.so.6 warnings
+                    if 'libtinfo.so.6: no version information available' not in line:
+                        lines, log_fn = stream_map[stream]
+                        log_fn(line.rstrip())
+                        lines.append(line)
+                        if log_file:
+                            log_file.write(line)
+                            log_file.flush()
+                else:
+                    open_streams.discard(stream)
+    finally:
+        process.wait()
+        if log_file:
+            log_file.close()
 
-    result = SimpleNamespace(
-        stdout=''.join(output_lines),
+    if process.returncode != 0:
+        logger.error("Command failed with return code %d: %s", process.returncode, command.strip())
+        raise subprocess.CalledProcessError(
+            process.returncode, command,
+            output=''.join(stdout_lines),
+            stderr=''.join(stderr_lines),
+        )
+
+    return SimpleNamespace(
+        stdout=''.join(stdout_lines),
+        stderr=''.join(stderr_lines),
         returncode=process.returncode,
         pid=process.pid,
-        command=command
+        command=command,
     )
-
-    # Raise exception on non-zero return code
-    if result.returncode != 0:
-        error_msg = f"Command failed with return code {result.returncode}: {command.strip()}"
-        logger.error(error_msg)
-        raise subprocess.CalledProcessError(result.returncode, command, output=''.join(output_lines))
-
-    return result
 
 def count_vcf_records(fp):
     result = execute_command(f'bcftools view -H {fp} | wc -l')
