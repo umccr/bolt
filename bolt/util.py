@@ -156,8 +156,8 @@ def merge_vcf_files(vcf_files, merged_vcf_fp):
     - Path to the sorted merged VCF file.
     """
     merged_vcf_fp = pathlib.Path(merged_vcf_fp)
-    merged_unsorted_vcf = merged_vcf_fp.with_suffix('.unsorted.vcf.gz')
-    merged_vcf = merged_vcf_fp.with_suffix('.vcf.gz')
+    merged_unsorted_vcf = merged_vcf_fp.parent / f'{merged_vcf_fp.name}.unsorted.vcf.gz'
+    merged_vcf = merged_vcf_fp.parent / f'{merged_vcf_fp.name}.vcf.gz'
 
     # Prepare the bcftools merge command arguments
     command_args = [
