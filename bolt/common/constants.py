@@ -277,9 +277,9 @@ VCF_HEADER_ENTRIES = {
         'Number': '1',
         'Type': 'String',
         'Description': (
-            'Tier reported by PCGR with the following meaning: TIER_1: strong clinical '
-            'significance; TIER_2: potential clinical significance; TIER_3: uncertain clinical '
-            'significance; TIER_4: other coding variants; NONCODING: other non-coding variants'
+            'Tier reported by PCGR: 1: strong clinical significance; '
+            '2: potential clinical significance; 3: uncertain clinical significance; '
+            '4: other coding variants; N: other non-coding variants'
         ),
     },
     VcfInfo.PCGR_CSQ: {

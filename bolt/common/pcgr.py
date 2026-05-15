@@ -312,6 +312,7 @@ def transfer_annotations_somatic(input_fp, tumor_name, pcgr_vcf_fp, pcgr_tsv_fp,
         # Annotate and write
         record_ann = annotate_record(record, pcgr_data, allow_missing=True)
         output_fh.write_record(record_ann)
+    output_fh.close()
 
 
 def transfer_annotations_germline(input_fp, normal_name, cpsr_dir, output_dir):
@@ -349,6 +350,7 @@ def transfer_annotations_germline(input_fp, normal_name, cpsr_dir, output_dir):
         # NOTE(SW): allow missing CPSR annotations for input variants, CPSR seems to drop some
         record_ann = annotate_record(record, cpsr_data, allow_missing=True)
         output_fh.write_record(record_ann)
+    output_fh.close()
 
 
 def collect_pcgr_annotation_data(tsv_fp, vcf_fp, info_field_map):
@@ -530,12 +532,12 @@ def split_vcf(input_vcf, output_dir, *, max_variants=None):
     variant_count = 0
     input_vcf = pathlib.Path(input_vcf)
     base_filename = input_vcf.stem
-    chunk_filename = output_dir / f"{base_filename}_chunk{chunk_number}.vcf"
+    chunk_filename = output_dir / f"{base_filename}_chunk{chunk_number}.vcf.gz"
     chunk_files.append(chunk_filename)
     # Open the input VCF using cyvcf2
     vcf_in = cyvcf2.VCF(input_vcf)
     # Create a new VCF file for the first chunk
-    vcf_out = cyvcf2.Writer(str(chunk_filename), vcf_in)
+    vcf_out = cyvcf2.Writer(str(chunk_filename), vcf_in, 'wz')
     last_position = None
     for record in vcf_in:
         current_position = record.POS
@@ -544,9 +546,9 @@ def split_vcf(input_vcf, output_dir, *, max_variants=None):
             # Close the current chunk file and start a new one
             vcf_out.close()
             chunk_number += 1
-            chunk_filename = output_dir / f"{base_filename}_chunk{chunk_number}.vcf"
+            chunk_filename = output_dir / f"{base_filename}_chunk{chunk_number}.vcf.gz"
             chunk_files.append(chunk_filename)
-            vcf_out = cyvcf2.Writer(str(chunk_filename), vcf_in)
+            vcf_out = cyvcf2.Writer(str(chunk_filename), vcf_in, 'wz')
             variant_count = 0
         # Write the record to the current chunk
         vcf_out.write_record(record)
