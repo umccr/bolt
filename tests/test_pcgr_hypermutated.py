@@ -362,6 +362,21 @@ class TestSplitVcf(unittest.TestCase):
             self.assertEqual(len(chunks), 1)
             self.assertEqual(_count_vcf(chunks[0]), 5)
 
+    def test_chunks_are_gzipped(self):
+        """Chunk files must be .vcf.gz — plain .vcf chunks violate CLAUDE.md and waste disk."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = pathlib.Path(tmp)
+            vcf_fp = tmp_path / 'input.vcf'
+            v = [(i * 10, f'PCGR_CSQ={_csq("intron_variant")}') for i in range(1, 26)]
+            _write_vcf(vcf_fp, v)
+
+            with patch('bolt.common.constants.MAX_SOMATIC_VARIANTS', 10):
+                chunks = pcgr.split_vcf(vcf_fp, tmp_path)
+
+            for chunk in chunks:
+                self.assertTrue(str(chunk).endswith('.vcf.gz'),
+                                f'Expected .vcf.gz chunk, got: {chunk.name}')
+
 
 class TestRunSomaticChunkArgMapping(unittest.TestCase):
     """Regression test: run_somatic_chunk must forward args as keywords to run_somatic.
