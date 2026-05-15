@@ -1,6 +1,6 @@
 # bolt changelog
 
-## dev
+## 0.3.0
 
 - [17](https://github.com/umccr/bolt/pull/17) - change dragen HRD file optional
 
