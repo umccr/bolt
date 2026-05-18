@@ -15,5 +15,6 @@ dependencies:
   - pybedtools
   - python >=3.10
   - pyyaml
+  - setuptools <81
   - vcfanno ==0.3.5
   - ncurses>=6.3
