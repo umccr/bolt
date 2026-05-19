@@ -377,6 +377,21 @@ class TestSplitVcf(unittest.TestCase):
                 self.assertTrue(str(chunk).endswith('.vcf.gz'),
                                 f'Expected .vcf.gz chunk, got: {chunk.name}')
 
+    def test_chunks_are_tabix_indexed(self):
+        """Each .vcf.gz chunk must have a .tbi index — PCGR v2.2.5 requires it."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = pathlib.Path(tmp)
+            vcf_fp = tmp_path / 'input.vcf'
+            v = [(i * 10, f'PCGR_CSQ={_csq("intron_variant")}') for i in range(1, 26)]
+            _write_vcf(vcf_fp, v)
+
+            with patch('bolt.common.constants.MAX_SOMATIC_VARIANTS', 10):
+                chunks = pcgr.split_vcf(vcf_fp, tmp_path)
+
+            for chunk in chunks:
+                tbi = pathlib.Path(str(chunk) + '.tbi')
+                self.assertTrue(tbi.exists(), f'Missing tabix index for {chunk.name}')
+
 
 class TestRunSomaticChunkArgMapping(unittest.TestCase):
     """Regression test: run_somatic_chunk must forward args as keywords to run_somatic.
