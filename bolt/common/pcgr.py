@@ -557,6 +557,10 @@ def split_vcf(input_vcf, output_dir, *, max_variants=None):
     # Close the last chunk file
     vcf_out.close()
     vcf_in.close()
+
+    for chunk_fp in chunk_files:
+        util.execute_command(f'bcftools index --tbi {chunk_fp}')
+
     logger.info(f"VCF file split into {len(chunk_files)} chunks.")
     return chunk_files
 
