@@ -44,5 +44,5 @@ FROM quay.io/bioconda/base-glibc-busybox-bash:2.1.0
 # Copy Conda install and all environments
 COPY --from=build /opt/conda/ /opt/conda/
 
-ENV PATH="/opt/conda/envs/bolt/bin:/opt/conda/bin:${PATH}"
+ENV PATH="/opt/conda/envs/bolt/bin:/opt/conda/envs/pcgr/bin:/opt/conda/bin:${PATH}"
 ENV LD_LIBRARY_PATH="/opt/conda/lib/"

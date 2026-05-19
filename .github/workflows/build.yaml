@@ -70,7 +70,7 @@ jobs:
           case "${{ matrix.build_name }}" in
             multiqc) docker run --rm ${{ steps.build.outputs.docker_tag }} multiqc --version ;;
             gpgr)    docker run --rm ${{ steps.build.outputs.docker_tag }} Rscript -e 'library(gpgr); cat("gpgr ok\n")' ;;
-            pcgr)    docker run --rm ${{ steps.build.outputs.docker_tag }} pcgr --version ;;
+            pcgr)    docker run --rm ${{ steps.build.outputs.docker_tag }} conda run --no-capture-output -n pcgr pcgr --version ;;
             snpeff)  docker run --rm ${{ steps.build.outputs.docker_tag }} bash -c 'snpEff -version 2>&1 | head -1' ;;
             circos)  docker run --rm ${{ steps.build.outputs.docker_tag }} circos --version ;;
           esac
