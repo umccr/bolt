@@ -231,7 +231,7 @@ VCF_HEADER_ENTRIES = {
     VcfFilter.PCGR_COUNT_LIMIT: {
         'Description': (
             f'Manually filtered to {MAX_SOMATIC_VARIANTS} variants to stay below the '
-            'PCGR 500,000 variant limit'
+            f'PCGR hard limit of 500,000 variants'
         ),
     },
 
