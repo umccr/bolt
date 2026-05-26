@@ -37,10 +37,39 @@ def prepare_vcf_somatic(input_fp, tumor_name, normal_name, output_dir):
     assert tumor_name != normal_name
     assert tumor_index != normal_index
 
+    # Parse contig lengths for boundary SNV filtering. MutationalPatterns extracts trinucleotide
+    # context [POS-1, POS+1] via BSgenome; a SNV at the first or last base of a contig causes
+    # BSgenome to abort with "regions beyond the boundaries of non-circular sequence chrN".
+    contig_lengths = {}
+    for line in input_fh.raw_header.split('\n'):
+        m = re.match(r'##contig=<ID=([^,>]+).*?length=(\d+)', line)
+        if m:
+            contig_lengths[m.group(1)] = int(m.group(2))
+
+    contigs_main = set(constants.CONTIGS_MAIN)
+
     output_fp = output_dir / f'{tumor_name}.pcgr_prep.vcf.gz'
     output_fh = cyvcf2.Writer.from_string(output_fp, get_minimal_header(input_fh), 'wz')
 
     for record in input_fh:
+        # Restrict to canonical chromosomes — chrM and alt contigs are excluded from the header
+        # by get_minimal_header and dropped downstream by transfer_annotations_somatic. Including
+        # them causes PCGR to write e.g. "M" into its internal mutsig VCF; MutationalPatterns
+        # cannot reconcile "M" against BSgenome's "chrM" seqinfo, which can corrupt seqlength
+        # metadata for other chromosomes and trigger BSgenome boundary errors.
+        if record.CHROM not in contigs_main:
+            continue
+
+        # Drop SNVs at contig boundaries; BSgenome's trinucleotide window [POS-1, POS+1] would
+        # extend beyond the sequence end and raise a "beyond the boundaries" error.
+        if len(record.REF) == 1 and len(record.ALT[0]) == 1:
+            chrom_len = contig_lengths.get(record.CHROM)
+            if chrom_len and (record.POS < 2 or record.POS >= chrom_len):
+                logger.warning(
+                    f'Dropping boundary SNV {record.CHROM}:{record.POS} (contig length: {chrom_len})'
+                )
+                continue
+
         # Collect tumor and normal FORMAT/AF and FORMAT/DP
         [tumor_dp] = record.format('DP')[tumor_index]
         [tumor_af] = record.format('AF')[tumor_index]
