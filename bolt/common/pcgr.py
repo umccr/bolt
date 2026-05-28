@@ -326,11 +326,15 @@ def transfer_annotations_germline(input_fp, normal_name, cpsr_dir, output_dir):
     cpsr_tsv_fp = pathlib.Path(cpsr_dir) / f'{normal_name}.cpsr.grch38.classification.tsv.gz'
     cpsr_vcf_fp = pathlib.Path(cpsr_dir) / f'{normal_name}.cpsr.grch38.vcf.gz'
 
-    # Enforce matching defined and source INFO annotations
-    util.check_annotation_headers(info_field_map, cpsr_vcf_fp)
+    # CPSR skips writing output files when zero variants pass filtering; treat as empty
+    if not cpsr_tsv_fp.exists() or not cpsr_vcf_fp.exists():
+        cpsr_data = dict()
+    else:
+        # Enforce matching defined and source INFO annotations
+        util.check_annotation_headers(info_field_map, cpsr_vcf_fp)
 
-    # Gather CPSR annotation data for records
-    cpsr_data = collect_cpsr_annotation_data(cpsr_tsv_fp, cpsr_vcf_fp, info_field_map)
+        # Gather CPSR annotation data for records
+        cpsr_data = collect_cpsr_annotation_data(cpsr_tsv_fp, cpsr_vcf_fp, info_field_map)
 
     # Open filehandles, set required header entries
     input_fh = cyvcf2.VCF(input_fp)
