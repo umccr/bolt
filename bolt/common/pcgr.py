@@ -73,11 +73,19 @@ def prepare_vcf_somatic(input_fp, tumor_name, normal_name, output_dir):
 
 
 def prepare_vcf_germline(input_fp, normal_name, output_dir):
+    # NOTE(QC): SAGE germline sets GT=./. for all variants — it encodes allele support in
+    # FORMAT AF/RC_CNT rather than GT. CPSR requires a called genotype to classify variants;
+    # ./. causes it to drop all records at report generation ("zero remaining variants").
+    # bcftools +setGT converts ./. to 0/1 (het) so CPSR produces meaningful output.
+    # Limitation: all variants are treated as het regardless of AF; homozygous alt calls
+    # (AF >= ~0.85) will be misclassified as het. This is clinically conservative — CPSR
+    # uses zygosity for recessive gene interpretation — but acceptable for a first pass.
 
     output_fp = output_dir / f'{normal_name}.cpsr.prep.vcf.gz'
 
     command = fr'''
         bcftools view -s {normal_name} {input_fp} | \
+            bcftools +setGT -- -t . -n 'c:0/1' | \
             bcftools annotate -x INFO,FILTER,FORMAT,^GT -o {output_fp};
             bcftools index -t {output_fp};
         '''
