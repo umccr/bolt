@@ -54,6 +54,15 @@ PCGR_TIERS_FILTERING = (
     '1',
 )
 
+# Map raw PCGR ACTIONABILITY_TIER strings (after upper() + underscore→space) to normalised short forms.
+# Any unrecognised value normalises to 'N' (non-coding / no tier).
+PCGR_TIER_NORMALISE = {
+    'TIER 1': '1', 'TIER1': '1', '1': '1',
+    'TIER 2': '2', 'TIER2': '2', '2': '2',
+    'TIER 3': '3', 'TIER3': '3', '3': '3',
+    'TIER 4': '4', 'TIER4': '4', '4': '4',
+}
+
 VEP_IMPACTS_FILTER = (
     'intergenic',
     'intronic',

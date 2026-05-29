@@ -365,20 +365,13 @@ def transfer_annotations_germline(input_fp, normal_name, cpsr_dir, output_dir):
     output_fh.close()
 
 
-_TIER_ORDER = {'1': 0, '2': 1, '3': 2, '4': 3, 'N': 4}
+# Derived from PCGR_TIERS_FILTERING: index 0 = most actionable ('1'), highest = least ('N').
+_TIER_ORDER = {tier: i for i, tier in enumerate(reversed(constants.PCGR_TIERS_FILTERING))}
 
 
 def _normalise_tier(record):
     raw = (record.get('ACTIONABILITY_TIER') or '').strip().replace('_', ' ').upper()
-    if raw in ('TIER 1', 'TIER1', '1'):
-        return '1'
-    elif raw in ('TIER 2', 'TIER2', '2'):
-        return '2'
-    elif raw in ('TIER 3', 'TIER3', '3'):
-        return '3'
-    elif raw in ('TIER 4', 'TIER4', '4'):
-        return '4'
-    return 'N'
+    return constants.PCGR_TIER_NORMALISE.get(raw, 'N')
 
 
 def collect_pcgr_annotation_data(tsv_fp, vcf_fp, info_field_map):
