@@ -365,6 +365,22 @@ def transfer_annotations_germline(input_fp, normal_name, cpsr_dir, output_dir):
     output_fh.close()
 
 
+_TIER_ORDER = {'1': 0, '2': 1, '3': 2, '4': 3, 'N': 4}
+
+
+def _normalise_tier(record):
+    raw = (record.get('ACTIONABILITY_TIER') or '').strip().replace('_', ' ').upper()
+    if raw in ('TIER 1', 'TIER1', '1'):
+        return '1'
+    elif raw in ('TIER 2', 'TIER2', '2'):
+        return '2'
+    elif raw in ('TIER 3', 'TIER3', '3'):
+        return '3'
+    elif raw in ('TIER 4', 'TIER4', '4'):
+        return '4'
+    return 'N'
+
+
 def collect_pcgr_annotation_data(tsv_fp, vcf_fp, info_field_map):
     # Gather all annotations from TSV
     data_tsv = dict()
@@ -373,22 +389,18 @@ def collect_pcgr_annotation_data(tsv_fp, vcf_fp, info_field_map):
     with open_fn(tsv_fp, 'rt') as tsv_fh:
         for record in csv.DictReader(tsv_fh, delimiter='\t'):
             key, record_ann = get_annotation_entry_tsv(record, info_field_map)
-            assert key not in data_tsv
 
-            # Normalize PCGR actionability tier to simple values: '1','2','3','4','N'
-            raw_tier = (record.get('ACTIONABILITY_TIER') or '').strip()
-            tier_norm = raw_tier.replace('_', ' ').upper()
-            if tier_norm in ('TIER 1','TIER1','1'):
-                tier_val = '1'
-            elif tier_norm in ('TIER 2','TIER2','2'):
-                tier_val = '2'
-            elif tier_norm in ('TIER 3','TIER3','3'):
-                tier_val = '3'
-            elif tier_norm in ('TIER 4','TIER4','4'):
-                tier_val = '4'
-            else:
-                tier_val = 'N'
+            tier_val = _normalise_tier(record)
             record_ann[constants.VcfInfo.PCGR_ACTIONABILITY_TIER] = tier_val
+
+            # NOTE(QC): PCGR can emit multiple TSV rows for the same variant when it maps to
+            # multiple transcripts. Keep the most actionable entry (lowest tier number).
+            if key in data_tsv:
+                existing_tier = data_tsv[key].get(constants.VcfInfo.PCGR_ACTIONABILITY_TIER, 'N')
+                if _TIER_ORDER.get(tier_val, 4) >= _TIER_ORDER.get(existing_tier, 4):
+                    logger.warning(f'Duplicate PCGR TSV key {key}: keeping tier {existing_tier}, skipping tier {tier_val}')
+                    continue
+                logger.warning(f'Duplicate PCGR TSV key {key}: replacing tier {existing_tier} with more actionable tier {tier_val}')
 
             # Store annotation data
             data_tsv[key] = record_ann
