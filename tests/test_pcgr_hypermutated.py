@@ -535,5 +535,55 @@ class TestCountVariantProcess(unittest.TestCase):
             self.assertEqual(counts['dragen'], 2)
 
 
+class TestGetAnnotationsVcf(unittest.TestCase):
+    """Unit tests for pcgr.get_annotations_vcf() duplicate-key handling."""
+
+    PCGR_VCF_HEADER = (
+        '##fileformat=VCFv4.2\n'
+        '##FILTER=<ID=PASS,Description="All filters passed">\n'
+        '##INFO=<ID=PCGR_CSQ,Number=.,Type=String,Description="">\n'
+        '##contig=<ID=1,length=248956422>\n'
+        '#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n'
+    )
+
+    def _write_pcgr_vcf(self, path, rows):
+        """Write a minimal PCGR-style VCF (no chr prefix, as PCGR strips it)."""
+        with open(path, 'w') as fh:
+            fh.write(self.PCGR_VCF_HEADER)
+            for chrom, pos, ref, alt, info in rows:
+                fh.write(f'{chrom}\t{pos}\t.\t{ref}\t{alt}\t.\tPASS\t{info}\n')
+
+    def test_duplicate_vcf_key_keeps_first_no_crash(self):
+        """Duplicate variant in PCGR VCF must be silently skipped, not raise AssertionError."""
+        info_field_map = {constants.VcfInfo.PCGR_CSQ: 'PCGR_CSQ'}
+        with tempfile.TemporaryDirectory() as tmp:
+            vcf_fp = pathlib.Path(tmp) / 'pcgr.vcf'
+            self._write_pcgr_vcf(vcf_fp, [
+                ('1', 100, 'A', 'T', 'PCGR_CSQ=first'),
+                ('1', 100, 'A', 'T', 'PCGR_CSQ=second'),  # duplicate
+            ])
+            result = pcgr.get_annotations_vcf(vcf_fp, info_field_map)
+
+        self.assertEqual(len(result), 1)
+        key = ('chr1', 100, 'A', 'T')
+        self.assertIn(key, result)
+        self.assertEqual(result[key][constants.VcfInfo.PCGR_CSQ], 'first')
+
+    def test_non_duplicate_vcf_keys_all_present(self):
+        """Distinct variants are all retained."""
+        info_field_map = {constants.VcfInfo.PCGR_CSQ: 'PCGR_CSQ'}
+        with tempfile.TemporaryDirectory() as tmp:
+            vcf_fp = pathlib.Path(tmp) / 'pcgr.vcf'
+            self._write_pcgr_vcf(vcf_fp, [
+                ('1', 100, 'A', 'T', 'PCGR_CSQ=v1'),
+                ('1', 200, 'C', 'G', 'PCGR_CSQ=v2'),
+            ])
+            result = pcgr.get_annotations_vcf(vcf_fp, info_field_map)
+
+        self.assertEqual(len(result), 2)
+        self.assertIn(('chr1', 100, 'A', 'T'), result)
+        self.assertIn(('chr1', 200, 'C', 'G'), result)
+
+
 if __name__ == '__main__':
     unittest.main()
