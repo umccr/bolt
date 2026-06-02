@@ -115,36 +115,45 @@ def entry(ctx, **kwargs):
     # PCGR report
     purple_data = parse_purple_purity_file(kwargs['purple_purity_fp'])
 
+    pcgr_skipped = False
     if variant_counts_process['filter_pass'] <= constants.MAX_SOMATIC_VARIANTS:
         pcgr_input_vcf_fp = kwargs['vcf_fp']
     else:
-        pcgr_input_vcf_fp = select_pcgr_variants(
-            kwargs['vcf_fp'],
-            kwargs['cancer_genes_fp'],
+        try:
+            pcgr_input_vcf_fp = select_pcgr_variants(
+                kwargs['vcf_fp'],
+                kwargs['cancer_genes_fp'],
+                kwargs['tumor_name'],
+                output_dir,
+            )
+        except RuntimeError as e:
+            # NOTE(QC): tiered filtering could not bring PASS count below
+            # MAX_SOMATIC_VARIANTS (sash #52). Skip PCGR; sash marks the
+            # PCGR emits as optional so downstream reports still publish.
+            logger.warning(f'Skipping PCGR for {kwargs["tumor_name"]}: {e}')
+            pcgr_skipped = True
+
+    if not pcgr_skipped:
+        pcgr_prep_fp = pcgr.prepare_vcf_somatic(
+            pcgr_input_vcf_fp,
             kwargs['tumor_name'],
+            kwargs['normal_name'],
             output_dir,
         )
 
-    pcgr_prep_fp = pcgr.prepare_vcf_somatic(
-        pcgr_input_vcf_fp,
-        kwargs['tumor_name'],
-        kwargs['normal_name'],
-        output_dir,
-    )
-
-    pcgr_output_dir = output_dir / 'pcgr'
-    pcgr.run_somatic(
-        pcgr_prep_fp,
-        kwargs['pcgr_data_dir'],
-        kwargs['vep_dir'],
-        pcgr_output_dir,
-        threads=kwargs['threads'],
-        pcgr_conda=kwargs['pcgr_conda'],
-        pcgrr_conda=kwargs['pcgrr_conda'],
-        purity=purple_data['purity'],
-        ploidy=purple_data['ploidy'],
-        sample_id=kwargs['tumor_name'],
-    )
+        pcgr_output_dir = output_dir / 'pcgr'
+        pcgr.run_somatic(
+            pcgr_prep_fp,
+            kwargs['pcgr_data_dir'],
+            kwargs['vep_dir'],
+            pcgr_output_dir,
+            threads=kwargs['threads'],
+            pcgr_conda=kwargs['pcgr_conda'],
+            pcgrr_conda=kwargs['pcgrr_conda'],
+            purity=purple_data['purity'],
+            ploidy=purple_data['ploidy'],
+            sample_id=kwargs['tumor_name'],
+        )
 
 
 def bcftools_stats_prepare(input_fp, tumor_name, output_dir):
