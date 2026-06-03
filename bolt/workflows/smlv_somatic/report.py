@@ -345,7 +345,7 @@ def select_pcgr_variants(vcf_fp, cancer_genes_fp, tumor_name, output_dir):
     for variant_count, variant in enumerate(cyvcf2.VCF(fp_annotated_out), 1):
         variant_repr = pcgr.get_variant_repr(variant)
 
-        if any(variant.INFO.get(e) for e in constants.RETAIN_FIELDS_FILTERING):
+        if any(variant.INFO.get(e) not in (None, '.') for e in constants.RETAIN_FIELDS_FILTERING):
             continue
 
         data = pcgr.get_variant_filter_data(variant)

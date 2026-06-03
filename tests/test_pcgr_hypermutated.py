@@ -174,6 +174,24 @@ class TestSelectPcgrVariants(unittest.TestCase):
             count = self._run(v, limit=4, tmp=tmp)
             self.assertEqual(count, 4)
 
+    def test_pcgr_mutation_hotspot_dot_not_treated_as_retained(self):
+        """PCGR_MUTATION_HOTSPOT=. must not retain variants — '.' is a missing-value placeholder.
+
+        cyvcf2 returns the string '.' (truthy) for String INFO fields written as '=.' by PCGR on
+        every non-hotspot variant.  Without the fix, any(variant.INFO.get(e) ...) always returns
+        True and ALL variants are treated as retained, so tiered filtering never drops anything and
+        RuntimeError fires for any sample with >450k variants (sash #52 root cause).
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            v = []
+            for i in range(1, 3):   # 2 real SAGE_HOTSPOT — must be retained
+                v.append((i*10, f'SAGE_HOTSPOT;PCGR_MUTATION_HOTSPOT=.;PCGR_ACTIONABILITY_TIER=1;PCGR_CSQ={_csq("intron_variant")}'))
+            for i in range(3, 8):   # 5 NONCODING with PCGR_MUTATION_HOTSPOT=. — must be droppable
+                v.append((i*10, f'PCGR_MUTATION_HOTSPOT=.;PCGR_ACTIONABILITY_TIER=N;PCGR_CSQ={_csq("intergenic_variant")}'))
+            # limit=2: only the 2 real SAGE_HOTSPOT variants survive; the 5 dot-placeholder ones are dropped
+            count = self._run(v, limit=2, tmp=tmp)
+            self.assertEqual(count, 2)
+
     def test_filters_set_vcf_marks_dropped_variants(self):
         """The traceability VCF marks filtered-out variants with PCGR_count_limit.
 
