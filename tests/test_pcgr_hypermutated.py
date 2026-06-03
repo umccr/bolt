@@ -174,6 +174,17 @@ class TestSelectPcgrVariants(unittest.TestCase):
             count = self._run(v, limit=4, tmp=tmp)
             self.assertEqual(count, 4)
 
+    def test_pcgr_mutation_hotspot_real_value_is_retained(self):
+        """A real PCGR_MUTATION_HOTSPOT value (non-dot) must retain the variant."""
+        with tempfile.TemporaryDirectory() as tmp:
+            v = []
+            for i in range(1, 3):   # 2 real hotspot variants — must survive
+                v.append((i*10, f'PCGR_MUTATION_HOTSPOT=GRCH38_1_{i}_A_T;PCGR_ACTIONABILITY_TIER=1;PCGR_CSQ={_csq("intron_variant")}'))
+            for i in range(3, 8):   # 5 NONCODING — dropped
+                v.append((i*10, f'PCGR_ACTIONABILITY_TIER=N;PCGR_CSQ={_csq("intergenic_variant")}'))
+            count = self._run(v, limit=2, tmp=tmp)
+            self.assertEqual(count, 2)
+
     def test_pcgr_mutation_hotspot_dot_not_treated_as_retained(self):
         """PCGR_MUTATION_HOTSPOT=. must not retain variants — '.' is a missing-value placeholder.
 
