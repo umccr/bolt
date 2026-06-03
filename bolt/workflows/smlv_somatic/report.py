@@ -345,6 +345,7 @@ def select_pcgr_variants(vcf_fp, cancer_genes_fp, tumor_name, output_dir):
     for variant_count, variant in enumerate(cyvcf2.VCF(fp_annotated_out), 1):
         variant_repr = pcgr.get_variant_repr(variant)
 
+        # NOTE(QC): exclude '.' — PCGR writes it as a missing-value placeholder for String fields; cyvcf2 returns it truthy (sash #52).
         if any(variant.INFO.get(e) not in (None, '.') for e in constants.RETAIN_FIELDS_FILTERING):
             continue
 
