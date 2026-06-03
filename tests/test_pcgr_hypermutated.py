@@ -585,5 +585,40 @@ class TestGetAnnotationsVcf(unittest.TestCase):
         self.assertIn(('chr1', 200, 'C', 'G'), result)
 
 
+class TestBcftoolsStatsPrepare(unittest.TestCase):
+    """Tests for bcftools_stats_prepare OA-only mode (no SQ FORMAT field)."""
+
+    SAGE_VCF_HEADER = (
+        '##fileformat=VCFv4.2\n'
+        '##FILTER=<ID=PASS,Description="All filters passed">\n'
+        '##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">\n'
+        '##FORMAT=<ID=AD,Number=R,Type=Integer,Description="Allelic depths">\n'
+        '##contig=<ID=chr1,length=248956422>\n'
+        '#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tTUMOR\tNORMAL\n'
+    )
+
+    def _write_sage_vcf(self, path, rows):
+        with open(path, 'w') as fh:
+            fh.write(self.SAGE_VCF_HEADER)
+            for chrom, pos, ref, alt, qual, info in rows:
+                fh.write(f'{chrom}\t{pos}\t.\t{ref}\t{alt}\t{qual}\tPASS\t{info}\tGT\t0/1\t0/0\n')
+
+    def test_oa_only_no_sq_field_keeps_qual(self):
+        """VCF with no SQ FORMAT field (OA-only) passes through without error."""
+        with tempfile.TemporaryDirectory() as tmp:
+            vcf_fp = pathlib.Path(tmp) / 'input.vcf'
+            self._write_sage_vcf(vcf_fp, [
+                ('chr1', 100, 'A', 'T', 50, '.'),
+                ('chr1', 200, 'C', 'G', 30, '.'),
+            ])
+            output_fp = report_mod.bcftools_stats_prepare(vcf_fp, 'TUMOR', pathlib.Path(tmp))
+
+            self.assertTrue(output_fp.exists())
+            records = list(cyvcf2.VCF(str(output_fp)))
+            self.assertEqual(len(records), 2)
+            self.assertAlmostEqual(records[0].QUAL, 50)
+            self.assertAlmostEqual(records[1].QUAL, 30)
+
+
 if __name__ == '__main__':
     unittest.main()

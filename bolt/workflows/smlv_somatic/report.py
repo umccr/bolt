@@ -161,20 +161,28 @@ def bcftools_stats_prepare(input_fp, tumor_name, output_dir):
     output_fp = output_dir / f'{tumor_name}.somatic.bcftools_stats.vcf.gz'
     output_fh = cyvcf2.Writer(output_fp, input_fh, 'wz')
 
+    try:
+        has_sq_format = input_fh.get_header_type('SQ')['HeaderType'] == 'FORMAT'
+    except KeyError:
+        has_sq_format = False
+
     tumor_index = input_fh.samples.index(tumor_name)
     for record in input_fh:
-        # NOTE(SW): SAGE and DRAGEN quality scores are not comparable; we only get stats of DRAGEN
-        # FORMAT/SQ
-        if (tumor_sq_value := record.format('SQ')) is not None:
-            # Round SQ so that BCFtools stats uses integers on x-axis
-            record.QUAL = round(tumor_sq_value[tumor_index,0])
-        elif record.INFO.get('SAGE_NOVEL') is not None:
-            record.QUAL = None
-        else:
-            raise AssertionError(f'Record at {record.CHROM}:{record.POS} has neither SQ nor SAGE_NOVEL — cannot determine QUAL')
+        if has_sq_format:
+            # NOTE(SW): SAGE and DRAGEN quality scores are not comparable; we only get stats of DRAGEN FORMAT/SQ
+            if (tumor_sq_value := record.format('SQ')) is not None:
+                # Round SQ so that BCFtools stats uses integers on x-axis
+                record.QUAL = round(tumor_sq_value[tumor_index, 0])
+            elif record.INFO.get('SAGE_NOVEL') is not None:
+                record.QUAL = None
+            else:
+                raise AssertionError(f'Record at {record.CHROM}:{record.POS} has neither SQ nor SAGE_NOVEL — cannot determine QUAL')
+        # else: OA-only mode — no SQ field; keep existing QUAL from SAGE
 
         output_fh.write_record(record)
 
+    output_fh.close()
+    input_fh.close()
     return output_fp
 
 
