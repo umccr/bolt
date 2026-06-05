@@ -147,7 +147,7 @@ def run_somatic(input_fp, pcgr_refdata_dir, vep_dir, output_dir, chunk_nbr=None,
         f'--control_af_tag NORMAL_AF',
         f'--genome_assembly grch38',
         f'--assay WGS',
-        # NOTE(QC): --estimate_signatures dropped (sash #57); keep msi/tmb.
+        # NOTE: --estimate_signatures dropped (umccr/sash#57); keep msi/tmb.
         *([] if disable_estimates else ['--estimate_msi', '--estimate_tmb']),
         f'--vcfanno_n_proc {vcfanno_threads}',
         f'--vep_n_forks {vep_forks}',
