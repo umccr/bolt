@@ -97,7 +97,7 @@ def entry(ctx, **kwargs):
 
     pcgr_output_dir = output_dir / 'pcgr'
     total_variants = util.count_vcf_records(pcgr_prep_fp)
-    print(f"Total number of variants in the input VCF: {total_variants}")
+    logger.info(f"Total number of variants in the input VCF: {total_variants}")
 
     # Run PCGR in chunks if exceeding the maximum allowed for somatic variants
     chunk_size = kwargs.get('pcgr_variant_chunk_size')

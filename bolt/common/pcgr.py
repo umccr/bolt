@@ -15,7 +15,6 @@ import cyvcf2
 from .. import util
 from ..common import constants
 
-# Use the existing logger configuration
 logger = logging.getLogger(__name__)
 
 def prepare_vcf_somatic(input_fp, tumor_name, normal_name, output_dir):
@@ -130,7 +129,6 @@ def run_somatic(input_fp, pcgr_refdata_dir, vep_dir, output_dir, chunk_nbr=None,
         logger.warning(f"Output directory '{output_dir}' already exists and will be overwritten")
         shutil.rmtree(output_dir)
 
-    # Create output directory
     output_dir.mkdir(parents=True, exist_ok=True)
 
     if not sample_id:
@@ -229,7 +227,6 @@ def run_germline(input_fp, panel_fp, pcgr_refdata_dir, vep_dir, output_dir, thre
         logger.warning(f"Output directory '{cpsr_output_dir}' already exists and will be overwritten")
         shutil.rmtree(cpsr_output_dir)
 
-    # Create output directory
     cpsr_output_dir.mkdir(parents=True, exist_ok=True)
 
     command_args = [
@@ -416,17 +413,11 @@ def collect_cpsr_annotation_data(tsv_fp, vcf_fp, info_field_map):
     return compile_annotation_data(data_tsv, data_vcf)
 
 def parse_genomic_change(genomic_change):
-    """
-    Parse a genomic change string, e.g., "3:g.41224645T>C"
-    Returns a tuple: (chrom, pos, ref, alt)
-    """
-    # Regular expression for the format "chrom:g.posRef>Alt"
+    # Format: "chrom:g.posRef>Alt" e.g. "3:g.41224645T>C"
     pattern = r'^(?P<chrom>\w+):g\.(?P<pos>\d+)(?P<ref>\w+)>(?P<alt>\w+)$'
     match = re.match(pattern, genomic_change)
     if not match:
         raise ValueError(f"Format not recognized: {genomic_change}")
-    
-    # Get values and format as needed
     chrom = f"chr{match.group('chrom')}"
     pos = int(match.group('pos'))
     ref = match.group('ref')
@@ -516,11 +507,6 @@ def annotate_record(record, annotations, *, allow_missing=False):
     return record
 
 def split_vcf(input_vcf, output_dir, *, max_variants=None):
-    """
-    Splits a VCF file into multiple chunks, each containing up to max_variants variants.
-    Each chunk includes the VCF header.
-    Ensures no overlapping positions between chunks.
-    """
     if max_variants is None:
         max_variants = constants.MAX_SOMATIC_VARIANTS
     elif max_variants <= 0:
@@ -568,27 +554,25 @@ def split_vcf(input_vcf, output_dir, *, max_variants=None):
 def run_somatic_chunk(vcf_chunks, pcgr_data_dir, vep_dir, output_dir, pcgr_output_dir, max_threads, pcgr_conda, pcgrr_conda):
     pcgr_tsv_files = []
     pcgr_vcf_files = []
-    
-    # Process each chunk sequentially
+
     for chunk_number, vcf_file in enumerate(vcf_chunks, start=1):
-        pcgr_tsv_fp, pcgr_vcf_fp = run_somatic(vcf_file, pcgr_data_dir, vep_dir, pcgr_output_dir, chunk_nbr=chunk_number, threads=max_threads, pcgr_conda=pcgr_conda, pcgrr_conda=pcgrr_conda)
+        pcgr_tsv_fp, pcgr_vcf_fp = run_somatic(vcf_file, pcgr_data_dir, vep_dir, pcgr_output_dir, chunk_nbr=chunk_number, threads=max_threads, pcgr_conda=pcgr_conda, pcgrr_conda=pcgrr_conda, disable_estimates=True)
         if pcgr_tsv_fp:
             pcgr_tsv_files.append(pcgr_tsv_fp)
         if pcgr_vcf_fp:
             pcgr_vcf_files.append(pcgr_vcf_fp)
-    
+
     merged_vcf_fp, merged_tsv_fp = merging_pcgr_files(output_dir, pcgr_vcf_files, pcgr_tsv_files)
     return merged_tsv_fp, merged_vcf_fp
+
 
 def merging_pcgr_files(output_dir, pcgr_vcf_files, pcgr_tsv_files):
     pcgr_dir = pathlib.Path(output_dir) / 'pcgr'
     pcgr_dir.mkdir(exist_ok=True)
 
-    # Merge all TSV files into a single file in the pcgr directory
     merged_tsv_fp = pcgr_dir / "nosampleset.pcgr_acmg.grch38.snvs_indels.tiers.tsv.gz"
     util.merge_tsv_files(pcgr_tsv_files, merged_tsv_fp)
 
-    # Step 5: Merge all VCF files into a single file in the pcgr directory
     merged_vcf_path = pcgr_dir / "nosampleset.pcgr.grch38.pass"
     merged_vcf = util.merge_vcf_files(pcgr_vcf_files, merged_vcf_path)
 
