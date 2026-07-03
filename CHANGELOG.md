@@ -1,5 +1,12 @@
 # bolt changelog
 
+## 0.3.2
+
+- [32](https://github.com/umccr/bolt/pull/32) - Graceful PCGR skip when `select_pcgr_variants` cannot cap variants to `MAX_SOMATIC_VARIANTS` — pipeline logs a warning and continues without the cancer report rather than hard-failing ([sash#52](https://github.com/umccr/sash/issues/52))
+- Fix `PCGR_MUTATION_HOTSPOT=.` (dot placeholder) being treated as a retained hotspot variant during tiered filtering — was preventing tier-based filtering from running on any sample with >450k PASS variants
+- Disable `--estimate_msi`/`--estimate_tmb` in chunked PCGR annotation runs (`split_vcf`) — estimates are not meaningful per-chunk
+- Pin `jlumbroso/free-disk-space` CI action to `v1.3.0` (was `@main`)
+
 ## 0.3.1
 
 - Fix `ModuleNotFoundError: No module named 'pkg_resources'` in `bolt:0.3.0-multiqc` — add `setuptools <81` to conda env
@@ -14,6 +21,10 @@
 - Fix `split_vcf` chunks not tabix-indexed, causing PCGR to fail reading them; add regression test
 - Bump `r-gpgr` to 2.3.1 in `Dockerfile.gpgr`
 - [31](https://github.com/umccr/bolt/pull/31) - Drop `--estimate_signatures` from PCGR somatic invocation — signature analysis comes from gpgr/sigrap downstream; keep `--estimate_msi`/`--estimate_tmb` ([sash#57](https://github.com/umccr/sash/issues/57))
+- [32](https://github.com/umccr/bolt/pull/32) - Fix `PCGR_MUTATION_HOTSPOT=.` treated as truthy in retention check, preventing tiered filtering from running for all hypermutated samples ([sash#52](https://github.com/umccr/sash/issues/52))
+- [32](https://github.com/umccr/bolt/pull/32) - Fix graceful PCGR skip when tiered filtering cannot bring PASS count below `MAX_SOMATIC_VARIANTS` — log warning and continue; non-PCGR outputs still publish ([sash#52](https://github.com/umccr/sash/issues/52))
+- Fix: disable MSI/TMB estimates when running PCGR on annotation chunks — estimates on partial VCFs are meaningless
+- Fix: pin `jlumbroso/free-disk-space` CI action to `v1.3.0` instead of `@main`
 
 ## 0.3.0
 
