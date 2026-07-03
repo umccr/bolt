@@ -151,7 +151,10 @@ def merge_vcf_files(vcf_files, merged_vcf_fp):
         '-Oz',
         f'-o {merged_unsorted_vcf}',
     ] + [str(vcf_file) for vcf_file in vcf_files]
-    execute_command(f'\n    {delimiter.join(command_args)}\n    ')
+    command_args_str = delimiter.join(command_args)
+    execute_command(f'''
+    {command_args_str}
+    ''')
 
     sort_command_args = [
         'bcftools sort',
@@ -159,7 +162,10 @@ def merge_vcf_files(vcf_files, merged_vcf_fp):
         f'-o {merged_vcf}',
         f'{merged_unsorted_vcf}'
     ]
-    execute_command(f'\n    {delimiter.join(sort_command_args)}\n    ')
+    sort_command_args_str = delimiter.join(sort_command_args)
+    execute_command(f'''
+    {sort_command_args_str}
+    ''')
 
     execute_command(f'bcftools index -t {merged_vcf}')
 
