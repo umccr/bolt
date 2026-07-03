@@ -8,6 +8,12 @@
 - Fix `split_vcf` writing uncompressed plain `.vcf` chunks — now uses `.vcf.gz` with `wz` mode
 - Fix `PCGR_ACTIONABILITY_TIER` VCF header description — updated to match stored short-form values (`1`,`2`,`3`,`4`,`N`)
 - Add regression test for chunk file compression (`test_chunks_are_gzipped`)
+- Add CI smoke tests to catch Docker image startup failures before push
+- Fix `build.yaml` and `Dockerfile.pcgr` build issues
+- Remove unused `logging` import and fix `PCGR_MAX_SOMATIC_VARIANTS` header description in `constants.py`
+- Fix `split_vcf` chunks not tabix-indexed, causing PCGR to fail reading them; add regression test
+- Bump `r-gpgr` to 2.3.1 in `Dockerfile.gpgr`
+- [31](https://github.com/umccr/bolt/pull/31) - Drop `--estimate_signatures` from PCGR somatic invocation — signature analysis comes from gpgr/sigrap downstream; keep `--estimate_msi`/`--estimate_tmb` ([sash#57](https://github.com/umccr/sash/issues/57))
 
 ## 0.3.0
 
