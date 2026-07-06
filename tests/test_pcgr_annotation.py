@@ -238,16 +238,10 @@ class TestAnnotateRecord(unittest.TestCase):
         result = pcgr.annotate_record(variant, annotations, allow_missing=True)
         self.assertIsNotNone(result)
 
-    def test_missing_key_allow_missing_false_raises(self):
-        # NOTE: annotate_record's `assert key not in annotations` guard is tautological
-        # (it re-checks a condition already established by the enclosing `if`), so it never
-        # fires. Control falls through to `annotations[key].items()`, which raises KeyError
-        # instead of the AssertionError the guard's phrasing implies. Asserting the actual
-        # (KeyError) behavior here — the net effect (failing loudly on an unresolvable
-        # missing key) is preserved either way.
+    def test_missing_key_allow_missing_false_raises_assertion(self):
         variant = _make_variant(chrom='chr1', pos=100, ref='A', alt='T')
         annotations = {}
-        with self.assertRaises(KeyError):
+        with self.assertRaises(AssertionError):
             pcgr.annotate_record(variant, annotations, allow_missing=False)
 
     def test_key_uses_chrom_pos_ref_alt(self):

@@ -498,7 +498,7 @@ def annotate_record(record, annotations, *, allow_missing=False):
         if allow_missing:
             return record
         else:
-            assert key not in annotations
+            assert False, f'Missing annotation key: {key}'
 
     # Transfer annotations
     for info_enum, v in annotations[key].items():
