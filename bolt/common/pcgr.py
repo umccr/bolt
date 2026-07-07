@@ -418,7 +418,9 @@ def parse_genomic_change(genomic_change):
     match = re.match(pattern, genomic_change)
     if not match:
         raise ValueError(f"Format not recognized: {genomic_change}")
-    chrom = f"chr{match.group('chrom')}"
+    chrom = match.group('chrom')
+    if not chrom.startswith('chr'):
+        chrom = f'chr{chrom}'
     pos = int(match.group('pos'))
     ref = match.group('ref')
     alt = match.group('alt')

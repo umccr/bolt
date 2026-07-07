@@ -80,12 +80,11 @@ def entry(ctx, **kwargs):
     #   - Set tumor and normal AF and DP in INFO for PCGR and remove all other annotations
     #   - Run PCGR on minimal VCF (pcgr_prep_fp)
     #   - Transfer selected PCGR annotations to unfiltered VCF (selected_fp)
-    #       - PCGR ACMG TIER [INFO/PCGR_TIER]
-    #       - VEP consequence [INFO/PCR_CSQ]
+    #       - PCGR actionability tier [INFO/PCGR_ACTIONABILITY_TIER]
+    #       - VEP consequence [INFO/PCGR_CSQ]
     #       - Known mutation hotspot [INFO/PCGR_MUTATION_HOTSPOT]
-    #       - ClinVar clinical significant [INFO/PCGR_CLNSIG]
+    #       - ClinVar classification [INFO/PCGR_CLINVAR_CLASSIFICATION]
     #       - Hits in TCGA [INFO/PCGR_TCGA_PANCANCER_COUNT]
-    #       - Hits in PCAWG [INFO/PCGR_ICGC_PCAWG_COUNT]
 
     # Prepare VCF for PCGR annotation
     pcgr_prep_fp = pcgr.prepare_vcf_somatic(
