@@ -2,7 +2,7 @@
 
 Covers only binary-free / cyvcf2-in-memory logic. Functions requiring
 bcftools/PCGR/vcfanno subprocesses are intentionally NOT tested here.
-Does NOT duplicate tests already in test_pcgr_hypermutated.py
+Does NOT duplicate tests already in test_pcgr.py / test_smlv_somatic_report.py
 (get_ordering, get_impacts, determine_filter, get_variant_filter_data,
 split_vcf, run_somatic_chunk, count_variant_process, select_pcgr_variants).
 """

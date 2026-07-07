@@ -14,7 +14,7 @@ import bolt.common.pcgr as pcgr
 import bolt.util as util
 import bolt.workflows.smlv_somatic.report as report_mod
 
-from tests.helpers import HEADER, _csq, _write_vcf
+from tests.helpers import _csq, _write_vcf
 
 
 class TestSelectPcgrVariants(unittest.TestCase):

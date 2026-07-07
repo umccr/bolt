@@ -30,10 +30,10 @@ either mocked/patched in tests or are not unit-tested (see below).
 | Module | Status | Functions covered | Test file |
 |---|---|---|---|
 | `bolt/util.py` | Partial | `get_vcf_header_entry`, `get_vcf_header_line`, `get_qualified_vcf_annotation`, `add_vcf_header_entry`, `merge_tsv_files` | `tests/test_util.py` |
-| `bolt/common/pcgr.py` | Partial | `get_ordering`, `get_impacts`, `determine_filter`, `get_variant_filter_data`, `split_vcf`, `run_somatic_chunk` (arg-mapping regression) | `tests/test_pcgr_hypermutated.py` |
+| `bolt/common/pcgr.py` | Partial | `get_ordering`, `get_impacts`, `determine_filter`, `get_variant_filter_data`, `split_vcf`, `run_somatic_chunk` (arg-mapping regression) | `tests/test_pcgr.py` |
 | `bolt/common/pcgr.py` | Partial | `parse_genomic_change`, `get_impacts_higher`, `get_annotation_entry_tsv`, `compile_annotation_data`, `annotate_record` | `tests/test_pcgr_annotation.py` |
 | `bolt/workflows/smlv_somatic/filter.py` | Partial | `set_filter_data` | `tests/test_smlv_somatic_filter.py` |
-| `bolt/workflows/smlv_somatic/report.py` | Partial | `select_pcgr_variants`, `count_variant_process`, `entry` overflow handling | `tests/test_pcgr_hypermutated.py` |
+| `bolt/workflows/smlv_somatic/report.py` | Partial | `select_pcgr_variants`, `count_variant_process`, `entry` overflow handling | `tests/test_smlv_somatic_report.py` |
 
 "Partial" means the module has meaningful test coverage for its pure/testable logic,
 but not every function in the file is tested (see below for what is excluded and why).
@@ -67,5 +67,5 @@ unit test suite:
 | `bolt/external/prioritize_sv.py` | Vendored third-party AstraZeneca SV annotation logic; no unit tests |
 
 Contributions raising coverage for these are welcome, but will require mocking
-subprocess calls (as done in `tests/test_pcgr_hypermutated.py` for
+subprocess calls (as done in `tests/test_smlv_somatic_report.py` for
 `select_pcgr_variants`) or dedicated fixture VCFs/TSVs under `tests/fixtures/`.
