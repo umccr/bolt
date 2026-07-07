@@ -9,6 +9,8 @@
 - Test: `TestSelectPcgrVariants` — 8 integration tests covering tiered trimming, hotspot retention, PANEL retention, NONCODING-first drop order, and the `PCGR_MUTATION_HOTSPOT=.` regression
 - Test: `TestEntrySkipsPcgrOnOverflow` — 2 tests: entry() skips PCGR on `RuntimeError` from unresolvable overflow; entry() calls PCGR normally when within limit
 - Test: `TestSelectPcgrVariantsRaisesOnUnresolvableOverflow` — asserts `RuntimeError` when retained variants alone exceed `MAX_SOMATIC_VARIANTS`
+- Test: `TestRunSomaticCommandArgs` — 2 tests: `--estimate_signatures` absent from all `run_somatic` commands; `disable_estimates=True` suppresses `--estimate_msi`/`--estimate_tmb`
+- Test: `TestRunSomaticChunkArgMapping.test_disable_estimates_passed_to_run_somatic` — `run_somatic_chunk` passes `disable_estimates=True` to every `run_somatic` call
 
 ## 0.3.1
 

@@ -470,6 +470,110 @@ class TestRunSomaticChunkArgMapping(unittest.TestCase):
             self.assertEqual(kw.get('chunk_nbr'), 1,
                              'chunk_nbr was not forwarded correctly')
 
+    def test_disable_estimates_passed_to_run_somatic(self):
+        """run_somatic_chunk must pass disable_estimates=True to every run_somatic call.
+
+        Chunked PCGR runs must not include --estimate_msi/--estimate_tmb per chunk —
+        those flags produce per-chunk partial estimates that are meaningless after merging.
+        Fixed in bolt 0.3.2 (umccr/sash#57 + disable_estimates wiring).
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = pathlib.Path(tmp)
+            vcf_fp = tmp_path / 'chunk.vcf'
+            _write_vcf(vcf_fp, [(10, f'PCGR_CSQ={_csq("intron_variant")}')])
+
+            captured = {}
+
+            def fake_run_somatic(*args, **kwargs):
+                captured['kwargs'] = kwargs
+                return (None, None)
+
+            with patch('bolt.common.pcgr.run_somatic', side_effect=fake_run_somatic), \
+                 patch('bolt.common.pcgr.merging_pcgr_files',
+                       return_value=(tmp_path / 'out.tsv', tmp_path / 'out.vcf')):
+                pcgr.run_somatic_chunk(
+                    [vcf_fp],
+                    pcgr_data_dir=tmp_path / 'pcgr_data',
+                    vep_dir=tmp_path / 'vep',
+                    output_dir=tmp_path,
+                    pcgr_output_dir=tmp_path / 'pcgr_output',
+                    max_threads=4,
+                    pcgr_conda='pcgr_env',
+                    pcgrr_conda='pcgrr_env',
+                )
+
+        self.assertTrue(
+            captured['kwargs'].get('disable_estimates'),
+            'run_somatic_chunk must forward disable_estimates=True — '
+            'per-chunk MSI/TMB estimates are meaningless after merge',
+        )
+
+
+class TestRunSomaticCommandArgs(unittest.TestCase):
+    """Verify run_somatic builds the correct PCGR command-line arguments."""
+
+    def test_estimate_signatures_absent_from_command(self):
+        """--estimate_signatures must not appear in the PCGR command (dropped in sash#57).
+
+        --estimate_msi and --estimate_tmb must still be present for non-chunked runs.
+        """
+        captured = {}
+
+        def fake_execute(cmd, **kwargs):
+            captured['cmd'] = cmd
+            # create the output files run_somatic expects to find after pcgr runs
+            output_dir.mkdir(parents=True, exist_ok=True)
+            (output_dir / 'nosampleset.pcgr.grch38.snv_indel_ann.tsv.gz').touch()
+            (output_dir / 'nosampleset.pcgr.grch38.pass.vcf.gz').touch()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = pathlib.Path(tmp)
+            output_dir = tmp_path / 'output'
+
+            with patch('bolt.common.pcgr.util.execute_command', side_effect=fake_execute):
+                pcgr.run_somatic(
+                    input_fp=tmp_path / 'input.vcf.gz',
+                    pcgr_refdata_dir=tmp_path / 'refdata',
+                    vep_dir=tmp_path / 'vep',
+                    output_dir=output_dir,
+                )
+
+        self.assertIn('cmd', captured, 'execute_command was not called')
+        self.assertNotIn('--estimate_signatures', captured['cmd'],
+                         '--estimate_signatures must be absent (dropped in sash#57)')
+        self.assertIn('--estimate_msi', captured['cmd'],
+                      '--estimate_msi must still be present for non-chunked runs')
+        self.assertIn('--estimate_tmb', captured['cmd'],
+                      '--estimate_tmb must still be present for non-chunked runs')
+
+    def test_disable_estimates_suppresses_msi_tmb(self):
+        """disable_estimates=True must suppress --estimate_msi and --estimate_tmb."""
+        captured = {}
+
+        def fake_execute(cmd, **kwargs):
+            captured['cmd'] = cmd
+            output_dir.mkdir(parents=True, exist_ok=True)
+            (output_dir / 'nosampleset.pcgr.grch38.snv_indel_ann.tsv.gz').touch()
+            (output_dir / 'nosampleset.pcgr.grch38.pass.vcf.gz').touch()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = pathlib.Path(tmp)
+            output_dir = tmp_path / 'output'
+
+            with patch('bolt.common.pcgr.util.execute_command', side_effect=fake_execute):
+                pcgr.run_somatic(
+                    input_fp=tmp_path / 'input.vcf.gz',
+                    pcgr_refdata_dir=tmp_path / 'refdata',
+                    vep_dir=tmp_path / 'vep',
+                    output_dir=output_dir,
+                    disable_estimates=True,
+                )
+
+        self.assertNotIn('--estimate_msi', captured['cmd'],
+                         '--estimate_msi must be absent when disable_estimates=True')
+        self.assertNotIn('--estimate_tmb', captured['cmd'],
+                         '--estimate_tmb must be absent when disable_estimates=True')
+
 
 class TestCountVariantProcess(unittest.TestCase):
     """Verify count_variant_process counts and is_hypermutated flag (bolt #27).
