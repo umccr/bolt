@@ -434,7 +434,13 @@ def get_annotations_vcf(vcf_fp, info_field_map):
         assert len(record.ALT) == 1
         [alt] = record.ALT
         key = (f'chr{record.CHROM}', record.POS, record.REF, alt)
-        assert key not in data_vcf
+
+        # NOTE(QC): PCGR can emit duplicate variant entries in its output VCF when a
+        # variant maps to multiple transcripts (sash sample L2600141). Keep the first
+        # entry and warn rather than asserting, consistent with the TSV-side dedup.
+        if key in data_vcf:
+            logger.warning(f'Duplicate PCGR VCF key {key}: keeping first entry')
+            continue
 
         data_vcf[key] = dict()
         for info_dst, info_src in info_field_map.items():
