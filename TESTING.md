@@ -20,16 +20,20 @@ Single test:
 python -m pytest tests/test_smlv_somatic_filter.py::TestSmlvSomaticFilter::test_min_af_filter -v
 ```
 
-All tests in `tests/` are pure Python + in-memory `cyvcf2` logic. They must run
+Tests in `tests/` are pure Python + in-memory `cyvcf2` logic and must run
 without any bioinformatics binary installed (no `bcftools`, `pcgr`, `cpsr`,
 `vcfanno`, `snpEff`, `gpgr`, VEP). Functions that shell out to those tools are
-either mocked/patched in tests or are not unit-tested (see below).
+either mocked/patched in tests or are not unit-tested (see below). The one
+exception is `TestMergeVcfFiles`, an integration test that exercises the real
+`merge_vcf_files` → `bcftools merge` path; it is guarded with
+`@unittest.skipUnless(shutil.which('bcftools'), ...)`, so it runs in the conda
+CI env and skips cleanly (never fails) where `bcftools` is absent.
 
 ## Test Coverage
 
 | Module | Status | Functions covered | Test file |
 |---|---|---|---|
-| `bolt/util.py` | Partial | `get_vcf_header_entry`, `get_vcf_header_line`, `get_qualified_vcf_annotation`, `add_vcf_header_entry`, `merge_tsv_files` | `tests/test_util.py` |
+| `bolt/util.py` | Partial | `get_vcf_header_entry`, `get_vcf_header_line`, `get_qualified_vcf_annotation`, `add_vcf_header_entry`, `merge_tsv_files`, `merge_vcf_files` (bcftools-guarded lossless/sorted integration test) | `tests/test_util.py` |
 | `bolt/common/pcgr.py` | Partial | `get_ordering`, `get_impacts`, `determine_filter`, `get_variant_filter_data`, `split_vcf`, `run_somatic_chunk` (arg-mapping regression) | `tests/test_pcgr.py` |
 | `bolt/common/pcgr.py` | Partial | `parse_genomic_change`, `get_impacts_higher`, `get_annotation_entry_tsv`, `compile_annotation_data`, `annotate_record` | `tests/test_pcgr_annotation.py` |
 | `bolt/workflows/smlv_somatic/filter.py` | Partial | `set_filter_data` | `tests/test_smlv_somatic_filter.py` |
@@ -47,7 +51,6 @@ unit test suite:
 | Function/module | Reason |
 |---|---|
 | `bolt/util.py: count_vcf_records` | Shells out to `bcftools view` |
-| `bolt/util.py: merge_vcf_files` | Shells out to `bcftools merge`/`sort`/`index` |
 | `bolt/util.py: execute_command` | Spawns real subprocesses via `/bin/bash` |
 | `bolt/common/pcgr.py: prepare_vcf_somatic` / `prepare_vcf_germline` | Shells out to `bcftools index`/`bcftools view`/`bcftools annotate` |
 | `bolt/common/pcgr.py: run_somatic` / `run_somatic_chunk` (execution path) / `run_germline` | Invoke `pcgr`/`cpsr` CLI directly |

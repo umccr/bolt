@@ -2,6 +2,7 @@
 
 ## 0.3.2
 
+- Test: `TestMergeVcfFiles` — bcftools-guarded integration test proving `merge_vcf_files` (`bcftools merge -m all`) losslessly reassembles PCGR sites-only chunk VCFs (no loss/dup, position-sorted, indexed output). Locks the sites-only invariant that keeps `bcftools merge` safe for the hypermutated chunk-merge path; documented with a `NOTE` in `merge_vcf_files`
 - [32](https://github.com/umccr/bolt/pull/32) - Fix `PCGR_MUTATION_HOTSPOT=.` (dot placeholder) treated as truthy in retention check — was preventing tiered filtering from running for any sample with >450k PASS variants ([sash#52](https://github.com/umccr/sash/issues/52))
 - [32](https://github.com/umccr/bolt/pull/32) - Graceful PCGR skip when `select_pcgr_variants` cannot cap variants to `MAX_SOMATIC_VARIANTS` — logs warning and continues without cancer report; non-PCGR outputs still publish ([sash#52](https://github.com/umccr/sash/issues/52))
 - Fix: disable `--estimate_msi`/`--estimate_tmb` in chunked PCGR annotation runs — estimates on partial VCFs are not meaningful

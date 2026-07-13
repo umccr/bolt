@@ -1,10 +1,14 @@
-"""Unit tests for bolt/util.py — VCF header helpers and merge_tsv_files.
+"""Unit tests for bolt/util.py — VCF header helpers and merge helpers.
 
-Covers only binary-free logic. Functions requiring bcftools (count_vcf_records,
-merge_vcf_files, execute_command) are intentionally NOT tested here.
+Covers binary-free logic plus a bcftools-guarded integration test for
+merge_vcf_files (see TestMergeVcfFiles). The remaining bcftools-dependent
+functions (count_vcf_records, execute_command) are intentionally NOT tested
+here.
 """
 import gzip
 import pathlib
+import shutil
+import subprocess
 import tempfile
 import unittest
 
@@ -178,6 +182,101 @@ class TestMergeTsvFiles(unittest.TestCase):
             with open(merged_fp, 'rb') as fh:
                 magic = fh.read(2)
             self.assertEqual(magic, b'\x1f\x8b')
+
+
+@unittest.skipUnless(shutil.which('bcftools'), 'bcftools not available')
+class TestMergeVcfFiles(unittest.TestCase):
+    """Integration tests for util.merge_vcf_files().
+
+    merge_vcf_files reassembles PCGR hypermutated chunk outputs with
+    `bcftools merge -m all`. These chunks are sites-only VCFs (no FORMAT or
+    sample columns) because pcgr.prepare_vcf_somatic / get_minimal_header strip
+    them. bcftools merge only fails with "Duplicate sample names" when inputs
+    carry a same-named genotype column; on sites-only inputs it correctly
+    produces the union. These tests lock that invariant in: any regression that
+    reintroduces a sample column (which would break the merge) is caught here.
+    """
+
+    # Sites-only header (no FORMAT, no sample column) — mirrors get_minimal_header
+    _HEADER = (
+        '##fileformat=VCFv4.2\n'
+        '##contig=<ID=chr1,length=248956422>\n'
+        '##contig=<ID=chr2,length=242193529>\n'
+        '##INFO=<ID=PCGR_TIER,Number=1,Type=String,Description="tier">\n'
+        '#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n'
+    )
+
+    def _write_chunk(self, path, records):
+        """Write a sites-only VCF, then bgzip + tabix-index it via bcftools.
+
+        `records` is an iterable of (chrom, pos, ref, alt) tuples. Positions
+        within a chunk are sorted before writing so indexing succeeds; chunks
+        may be mutually out of order to exercise the cross-chunk sort.
+        """
+        plain = pathlib.Path(f'{path}.plain.vcf')
+        with open(plain, 'w') as fh:
+            fh.write(self._HEADER)
+            for chrom, pos, ref, alt in sorted(records, key=lambda r: (r[0], r[1])):
+                fh.write(f'{chrom}\t{pos}\t.\t{ref}\t{alt}\t.\tPASS\tPCGR_TIER=1\n')
+        subprocess.run(['bcftools', 'view', '-Oz', '-o', str(path), str(plain)], check=True)
+        subprocess.run(['bcftools', 'index', '-t', str(path)], check=True)
+        return records
+
+    def _read_keys(self, vcf_fp):
+        return [
+            (record.CHROM, record.POS, record.REF, record.ALT[0])
+            for record in cyvcf2.VCF(str(vcf_fp))
+        ]
+
+    def test_merge_is_lossless_and_sorted(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = pathlib.Path(tmp)
+            # Disjoint positions, and chunks deliberately out of order relative
+            # to each other so the merge must interleave/sort across chunks.
+            chunk_a = self._write_chunk(
+                tmp_path / 'chunk_a.vcf.gz',
+                [('chr1', 300, 'G', 'A'), ('chr1', 100, 'A', 'T'), ('chr2', 50, 'C', 'G')],
+            )
+            chunk_b = self._write_chunk(
+                tmp_path / 'chunk_b.vcf.gz',
+                [('chr1', 200, 'C', 'G'), ('chr1', 400, 'T', 'C')],
+            )
+
+            merged_vcf = util.merge_vcf_files(
+                [tmp_path / 'chunk_a.vcf.gz', tmp_path / 'chunk_b.vcf.gz'],
+                tmp_path / 'merged.pass',
+            )
+
+            merged_keys = self._read_keys(merged_vcf)
+            expected_keys = list(chunk_a) + list(chunk_b)
+
+            # No loss, no duplication: exact multiset match
+            self.assertEqual(len(merged_keys), len(expected_keys))
+            self.assertCountEqual(merged_keys, expected_keys)
+            # Position-sorted output (cross-chunk interleave)
+            self.assertEqual(
+                merged_keys,
+                sorted(merged_keys, key=lambda k: (k[0], k[1])),
+            )
+
+    def test_merge_output_is_bgzipped_and_indexed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = pathlib.Path(tmp)
+            self._write_chunk(tmp_path / 'chunk_a.vcf.gz', [('chr1', 100, 'A', 'T')])
+            self._write_chunk(tmp_path / 'chunk_b.vcf.gz', [('chr1', 200, 'C', 'G')])
+
+            merged_vcf = util.merge_vcf_files(
+                [tmp_path / 'chunk_a.vcf.gz', tmp_path / 'chunk_b.vcf.gz'],
+                tmp_path / 'merged.pass',
+            )
+
+            # BGZF/gzip magic bytes
+            with open(merged_vcf, 'rb') as fh:
+                self.assertEqual(fh.read(2), b'\x1f\x8b')
+            # merge_vcf_files tabix-indexes its output
+            self.assertTrue(pathlib.Path(f'{merged_vcf}.tbi').exists())
+            # Intermediate unsorted file is cleaned up
+            self.assertFalse((tmp_path / 'merged.pass.unsorted.vcf.gz').exists())
 
 
 if __name__ == '__main__':

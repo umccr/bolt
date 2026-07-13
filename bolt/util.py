@@ -138,6 +138,14 @@ def merge_tsv_files(tsv_files, merged_tsv_fp):
 
 
 def merge_vcf_files(vcf_files, merged_vcf_fp):
+    # NOTE(QC): reassembles PCGR hypermutated chunk outputs. `bcftools merge` is
+    # a multi-sample joiner and would fail with "Duplicate sample names" on
+    # same-named inputs that carry a genotype column — but this is safe here
+    # because PCGR inputs/outputs are sites-only (pcgr.prepare_vcf_somatic /
+    # get_minimal_header strip all FORMAT and sample columns), so merge just
+    # produces the union of disjoint chunks. Do not switch to a genotype-bearing
+    # VCF upstream without revisiting this. Locked by tests/test_util.py
+    # TestMergeVcfFiles (bcftools-guarded lossless/sorted regression test).
     merged_vcf_fp = pathlib.Path(merged_vcf_fp)
     merged_unsorted_vcf = merged_vcf_fp.parent / f'{merged_vcf_fp.name}.unsorted.vcf.gz'
     merged_vcf = merged_vcf_fp.parent / f'{merged_vcf_fp.name}.vcf.gz'
