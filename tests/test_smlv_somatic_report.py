@@ -381,6 +381,36 @@ class TestEntrySkipsPcgrOnOverflow(unittest.TestCase):
 
             self.assertEqual(result.exit_code, 0, result.output)
             mock_run.assert_called_once()
+            self.assertIs(mock_run.call_args.kwargs['disable_estimates'], False)
+
+    def test_run_somatic_called_with_disable_estimates_when_trimmed(self):
+        """When select_pcgr_variants trims a hypermutated sample, estimates must be disabled."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = pathlib.Path(tmp)
+            dummy = tmp_path / 'dummy.vcf.gz'
+            dummy.touch()
+            fake_selected_output = tmp_path / 'selected.vcf.gz'
+            fake_selected_output.touch()
+            fake_prep_output = tmp_path / 'prep.vcf.gz'
+            fake_prep_output.touch()
+
+            with patch.object(report_mod, 'bcftools_stats_prepare', return_value=dummy), \
+                 patch.object(report_mod, 'run_bcftools_stats'), \
+                 patch.object(report_mod, 'allele_frequencies'), \
+                 patch.object(report_mod, 'count_variant_types', return_value=_PASS_COUNTS), \
+                 patch.object(report_mod, 'count_variant_process',
+                              return_value={'filter_pass': constants.MAX_SOMATIC_VARIANTS + 1}), \
+                 patch.object(report_mod, 'parse_purple_purity_file',
+                              return_value={'purity': 0.8, 'ploidy': 2.0}), \
+                 patch.object(report_mod, 'select_pcgr_variants',
+                              return_value=fake_selected_output), \
+                 patch.object(pcgr, 'prepare_vcf_somatic', return_value=fake_prep_output), \
+                 patch.object(pcgr, 'run_somatic') as mock_run:
+                result = CliRunner().invoke(report_mod.entry, _cli_args(dummy, tmp_path / 'out'))
+
+            self.assertEqual(result.exit_code, 0, result.output)
+            mock_run.assert_called_once()
+            self.assertIs(mock_run.call_args.kwargs['disable_estimates'], True)
 
 
 if __name__ == '__main__':

@@ -116,7 +116,8 @@ def entry(ctx, **kwargs):
     purple_data = parse_purple_purity_file(kwargs['purple_purity_fp'])
 
     pcgr_skipped = False
-    if variant_counts_process['filter_pass'] <= constants.MAX_SOMATIC_VARIANTS:
+    pcgr_input_trimmed = variant_counts_process['filter_pass'] > constants.MAX_SOMATIC_VARIANTS
+    if not pcgr_input_trimmed:
         pcgr_input_vcf_fp = kwargs['vcf_fp']
     else:
         try:
@@ -153,6 +154,10 @@ def entry(ctx, **kwargs):
             purity=purple_data['purity'],
             ploidy=purple_data['ploidy'],
             sample_id=kwargs['tumor_name'],
+            # NOTE(QC): pcgr_input_vcf_fp is a tiered-selection subset when
+            # pcgr_input_trimmed, so TMB/MSI estimates on it are not meaningful —
+            # same reasoning as run_somatic_chunk's chunked inputs.
+            disable_estimates=pcgr_input_trimmed,
         )
 
 
