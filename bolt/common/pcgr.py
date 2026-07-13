@@ -436,8 +436,9 @@ def get_annotations_vcf(vcf_fp, info_field_map):
         key = (f'chr{record.CHROM}', record.POS, record.REF, alt)
 
         # NOTE(QC): PCGR can emit duplicate variant entries in its output VCF when a
-        # variant maps to multiple transcripts (sash sample L2600141). Keep the first
-        # entry and warn rather than asserting, consistent with the TSV-side dedup.
+        # variant maps to multiple transcripts. Keep the first entry and warn rather
+        # than asserting, consistent with the TSV-side dedup.
+        # https://github.com/umccr/bolt/pull/34
         if key in data_vcf:
             logger.warning(f'Duplicate PCGR VCF key {key}: keeping first entry')
             continue
