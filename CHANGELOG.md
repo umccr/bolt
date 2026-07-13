@@ -2,6 +2,9 @@
 
 ## 0.3.2
 
+- Fix: `get_annotations_vcf` crashed with `AssertionError` on a duplicate PCGR VCF key (variant mapping to multiple transcripts) — now logs a warning and keeps the first entry ([34](https://github.com/umccr/bolt/pull/34))
+- Fix: `collect_pcgr_annotation_data` / `collect_cpsr_annotation_data` had the same duplicate-key `AssertionError` on their TSV paths — somatic path now keeps the most actionable tier on a duplicate, germline/CPSR path keeps the first entry; both warn instead of crashing
+- Test: `TestGetAnnotationsVcf`, `TestCollectPcgrAnnotationData`, `TestCollectCpsrAnnotationData` — duplicate-key regression coverage for all three annotation-collection paths
 - Test: `TestMergeVcfFiles` — bcftools-guarded integration test proving `merge_vcf_files` (`bcftools merge -m all`) losslessly reassembles PCGR sites-only chunk VCFs (no loss/dup, position-sorted, indexed output). Locks the sites-only invariant that keeps `bcftools merge` safe for the hypermutated chunk-merge path; documented with a `NOTE` in `merge_vcf_files`
 - [32](https://github.com/umccr/bolt/pull/32) - Fix `PCGR_MUTATION_HOTSPOT=.` (dot placeholder) treated as truthy in retention check — was preventing tiered filtering from running for any sample with >450k PASS variants ([sash#52](https://github.com/umccr/sash/issues/52))
 - [32](https://github.com/umccr/bolt/pull/32) - Graceful PCGR skip when `select_pcgr_variants` cannot cap variants to `MAX_SOMATIC_VARIANTS` — logs warning and continues without cancer report; non-PCGR outputs still publish ([sash#52](https://github.com/umccr/sash/issues/52))
