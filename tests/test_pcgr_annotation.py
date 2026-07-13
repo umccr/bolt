@@ -314,5 +314,115 @@ class TestGetAnnotationsVcf(unittest.TestCase):
         self.assertEqual(result[('chr1', 200, 'C', 'G')][constants.VcfInfo.PCGR_CSQ], 'v2')
 
 
+def _write_empty_pcgr_vcf(path):
+    """Header-only sites-only VCF, so get_annotations_vcf() returns {}."""
+    with open(path, 'w') as fh:
+        fh.write(
+            '##fileformat=VCFv4.2\n'
+            '##FILTER=<ID=PASS,Description="All filters passed">\n'
+            f'##INFO=<ID={constants.VcfInfo.PCGR_CSQ.value},Number=.,Type=String,Description="">\n'
+            '##contig=<ID=1,length=248956422>\n'
+            '#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n'
+        )
+
+
+def _write_tsv(path, header, rows):
+    import csv as _csv
+    with open(path, 'w', newline='') as fh:
+        writer = _csv.DictWriter(fh, fieldnames=header, delimiter='\t')
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(row)
+
+
+class TestCollectPcgrAnnotationData(unittest.TestCase):
+    """Unit tests for pcgr.collect_pcgr_annotation_data() duplicate-key tier resolution."""
+
+    HEADER = ['GENOMIC_CHANGE', 'CSQ', 'ACTIONABILITY_TIER']
+
+    def _collect(self, tmp, rows):
+        tsv_fp = pathlib.Path(tmp) / 'pcgr.tsv'
+        vcf_fp = pathlib.Path(tmp) / 'pcgr.vcf'
+        _write_tsv(tsv_fp, self.HEADER, rows)
+        _write_empty_pcgr_vcf(vcf_fp)
+        info_field_map = {constants.VcfInfo.PCGR_CSQ: 'CSQ'}
+        return pcgr.collect_pcgr_annotation_data(tsv_fp, vcf_fp, info_field_map)
+
+    def test_duplicate_key_keeps_more_actionable_tier_no_crash(self):
+        """A second, more-actionable-tier row for the same variant replaces the first."""
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self._collect(tmp, [
+                {'GENOMIC_CHANGE': '1:g.100A>T', 'CSQ': 'transcript_a', 'ACTIONABILITY_TIER': 'TIER 3'},
+                {'GENOMIC_CHANGE': '1:g.100A>T', 'CSQ': 'transcript_b', 'ACTIONABILITY_TIER': 'TIER 1'},
+            ])
+        key = ('chr1', 100, 'A', 'T')
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[key][constants.VcfInfo.PCGR_CSQ], 'transcript_b')
+        self.assertEqual(result[key][constants.VcfInfo.PCGR_ACTIONABILITY_TIER], '1')
+
+    def test_duplicate_key_skips_less_actionable_tier(self):
+        """A second, less-actionable-tier row for the same variant is dropped."""
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self._collect(tmp, [
+                {'GENOMIC_CHANGE': '1:g.100A>T', 'CSQ': 'transcript_a', 'ACTIONABILITY_TIER': 'TIER 1'},
+                {'GENOMIC_CHANGE': '1:g.100A>T', 'CSQ': 'transcript_b', 'ACTIONABILITY_TIER': 'TIER 3'},
+            ])
+        key = ('chr1', 100, 'A', 'T')
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[key][constants.VcfInfo.PCGR_CSQ], 'transcript_a')
+        self.assertEqual(result[key][constants.VcfInfo.PCGR_ACTIONABILITY_TIER], '1')
+
+    def test_non_duplicate_keys_all_present(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self._collect(tmp, [
+                {'GENOMIC_CHANGE': '1:g.100A>T', 'CSQ': 'v1', 'ACTIONABILITY_TIER': 'TIER 1'},
+                {'GENOMIC_CHANGE': '1:g.200C>G', 'CSQ': 'v2', 'ACTIONABILITY_TIER': 'TIER 2'},
+            ])
+        self.assertEqual(len(result), 2)
+        self.assertIn(('chr1', 100, 'A', 'T'), result)
+        self.assertIn(('chr1', 200, 'C', 'G'), result)
+
+
+class TestCollectCpsrAnnotationData(unittest.TestCase):
+    """Unit tests for pcgr.collect_cpsr_annotation_data() duplicate-key handling."""
+
+    HEADER = ['GENOMIC_CHANGE', 'CSQ']
+
+    def _collect(self, tmp, rows):
+        tsv_fp = pathlib.Path(tmp) / 'cpsr.tsv.gz'
+        vcf_fp = pathlib.Path(tmp) / 'cpsr.vcf'
+        import gzip as _gzip
+        import csv as _csv
+        with _gzip.open(tsv_fp, 'wt', newline='') as fh:
+            writer = _csv.DictWriter(fh, fieldnames=self.HEADER, delimiter='\t')
+            writer.writeheader()
+            for row in rows:
+                writer.writerow(row)
+        _write_empty_pcgr_vcf(vcf_fp)
+        info_field_map = {constants.VcfInfo.PCGR_CSQ: 'CSQ'}
+        return pcgr.collect_cpsr_annotation_data(tsv_fp, vcf_fp, info_field_map)
+
+    def test_duplicate_key_keeps_first_no_crash(self):
+        """A duplicate CPSR TSV row for the same variant must be skipped, not raise."""
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self._collect(tmp, [
+                {'GENOMIC_CHANGE': '1:g.100A>T', 'CSQ': 'first'},
+                {'GENOMIC_CHANGE': '1:g.100A>T', 'CSQ': 'second'},
+            ])
+        key = ('chr1', 100, 'A', 'T')
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[key][constants.VcfInfo.PCGR_CSQ], 'first')
+
+    def test_non_duplicate_keys_all_present(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self._collect(tmp, [
+                {'GENOMIC_CHANGE': '1:g.100A>T', 'CSQ': 'v1'},
+                {'GENOMIC_CHANGE': '1:g.200C>G', 'CSQ': 'v2'},
+            ])
+        self.assertEqual(len(result), 2)
+        self.assertIn(('chr1', 100, 'A', 'T'), result)
+        self.assertIn(('chr1', 200, 'C', 'G'), result)
+
+
 if __name__ == '__main__':
     unittest.main()
