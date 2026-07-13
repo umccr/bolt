@@ -184,6 +184,60 @@ class TestMergeTsvFiles(unittest.TestCase):
             self.assertEqual(magic, b'\x1f\x8b')
 
 
+class TestCheckAnnotationHeaders(unittest.TestCase):
+    """Unit tests for util.check_annotation_headers()."""
+
+    def _write_vcf_with_sage_hotspot(self, path, description):
+        with open(path, 'w') as fh:
+            fh.write(
+                '##fileformat=VCFv4.2\n'
+                '##FILTER=<ID=PASS,Description="All filters passed">\n'
+                f'##INFO=<ID=SAGE_HOTSPOT,Number=0,Type=Flag,Description="{description}">\n'
+                '##contig=<ID=chr1,length=248956422>\n'
+                '#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n'
+                'chr1\t100\t.\tA\tT\t.\tPASS\t.\n'
+            )
+
+    def _write_vcf_without_sage_fields(self, path):
+        with open(path, 'w') as fh:
+            fh.write(
+                '##fileformat=VCFv4.2\n'
+                '##FILTER=<ID=PASS,Description="All filters passed">\n'
+                '##contig=<ID=chr1,length=248956422>\n'
+                '#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n'
+                'chr1\t100\t.\tA\tT\t.\tPASS\t.\n'
+            )
+
+    def test_matching_description_returns_normally(self):
+        expected = constants.VCF_HEADER_ENTRIES[constants.VcfInfo.SAGE_HOTSPOT]['Description']
+        with tempfile.TemporaryDirectory() as tmp:
+            vcf_fp = pathlib.Path(tmp) / 'matching.vcf'
+            self._write_vcf_with_sage_hotspot(vcf_fp, expected)
+            # No exception/SystemExit raised
+            util.check_annotation_headers(
+                {constants.VcfInfo.SAGE_HOTSPOT: 'SAGE_HOTSPOT'}, vcf_fp,
+            )
+
+    def test_mismatched_description_exits(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vcf_fp = pathlib.Path(tmp) / 'mismatched.vcf'
+            self._write_vcf_with_sage_hotspot(vcf_fp, 'a totally different description')
+            with self.assertRaises(SystemExit):
+                util.check_annotation_headers(
+                    {constants.VcfInfo.SAGE_HOTSPOT: 'SAGE_HOTSPOT'}, vcf_fp,
+                )
+
+    def test_field_absent_from_target_vcf_is_skipped(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vcf_fp = pathlib.Path(tmp) / 'no_sage.vcf'
+            self._write_vcf_without_sage_fields(vcf_fp)
+            # SAGE_HOTSPOT has no header entry in this VCF at all; must be
+            # skipped rather than raising, so no exception/SystemExit here.
+            util.check_annotation_headers(
+                {constants.VcfInfo.SAGE_HOTSPOT: 'SAGE_HOTSPOT'}, vcf_fp,
+            )
+
+
 @unittest.skipUnless(shutil.which('bcftools'), 'bcftools not available')
 class TestMergeVcfFiles(unittest.TestCase):
     """Integration tests for util.merge_vcf_files().

@@ -33,11 +33,12 @@ CI env and skips cleanly (never fails) where `bcftools` is absent.
 
 | Module | Status | Functions covered | Test file |
 |---|---|---|---|
-| `bolt/util.py` | Partial | `get_vcf_header_entry`, `get_vcf_header_line`, `get_qualified_vcf_annotation`, `add_vcf_header_entry`, `merge_tsv_files`, `merge_vcf_files` (bcftools-guarded lossless/sorted integration test) | `tests/test_util.py` |
+| `bolt/util.py` | Partial | `get_vcf_header_entry`, `get_vcf_header_line`, `get_qualified_vcf_annotation`, `add_vcf_header_entry`, `merge_tsv_files`, `merge_vcf_files` (bcftools-guarded lossless/sorted integration test), `check_annotation_headers` | `tests/test_util.py` |
 | `bolt/common/pcgr.py` | Partial | `get_ordering`, `get_impacts`, `determine_filter`, `get_variant_filter_data`, `split_vcf`, `run_somatic_chunk` (arg-mapping regression) | `tests/test_pcgr.py` |
-| `bolt/common/pcgr.py` | Partial | `parse_genomic_change`, `get_impacts_higher`, `get_annotation_entry_tsv`, `compile_annotation_data`, `annotate_record` | `tests/test_pcgr_annotation.py` |
+| `bolt/common/pcgr.py` | Partial | `parse_genomic_change`, `get_impacts_higher`, `get_annotation_entry_tsv`, `compile_annotation_data`, `annotate_record`, `get_annotations_vcf` (duplicate-key regression), `collect_pcgr_annotation_data` (duplicate-key tier resolution), `collect_cpsr_annotation_data` (duplicate-key regression) | `tests/test_pcgr_annotation.py` |
 | `bolt/workflows/smlv_somatic/filter.py` | Partial | `set_filter_data` | `tests/test_smlv_somatic_filter.py` |
-| `bolt/workflows/smlv_somatic/report.py` | Partial | `select_pcgr_variants`, `count_variant_process`, `entry` overflow handling | `tests/test_smlv_somatic_report.py` |
+| `bolt/workflows/smlv_somatic/report.py` | Partial | `select_pcgr_variants`, `count_variant_process`, `entry` overflow handling, `entry` `disable_estimates` branching | `tests/test_smlv_somatic_report.py` |
+| `bolt/workflows/smlv_somatic/rescue.py` | Partial | `annotate_existing_sage_calls` (SAGE VCF header-consistency check only) | `tests/test_smlv_somatic_rescue.py` |
 
 "Partial" means the module has meaningful test coverage for its pure/testable logic,
 but not every function in the file is tested (see below for what is excluded and why).
@@ -55,10 +56,9 @@ unit test suite:
 | `bolt/common/pcgr.py: prepare_vcf_somatic` / `prepare_vcf_germline` | Shells out to `bcftools index`/`bcftools view`/`bcftools annotate` |
 | `bolt/common/pcgr.py: run_somatic` / `run_somatic_chunk` (execution path) / `run_germline` | Invoke `pcgr`/`cpsr` CLI directly |
 | `bolt/common/pcgr.py: transfer_annotations_somatic` / `transfer_annotations_germline` | Depend on real PCGR/CPSR TSV+VCF output files |
-| `bolt/common/pcgr.py: collect_pcgr_annotation_data` / `collect_cpsr_annotation_data` / `get_annotations_vcf` | Read real PCGR/CPSR TSV/VCF fixture files end-to-end (only their pure sub-helpers are unit tested — see `get_annotation_entry_tsv`, `compile_annotation_data`) |
 | `bolt/common/pcgr.py: merging_pcgr_files` | Wraps `merge_vcf_files`/`merge_tsv_files` (bcftools-dependent) |
 | `bolt/workflows/smlv_somatic/annotate.py` | Orchestrates vcfanno + PON + PCGR subprocess pipeline; no unit tests |
-| `bolt/workflows/smlv_somatic/rescue.py` | SAGE hotspot recall logic; no unit tests |
+| `bolt/workflows/smlv_somatic/rescue.py` (all functions except the header check) | SAGE hotspot recall orchestrates `bcftools isec`/`concat`/`annotate` subprocesses end-to-end; no unit tests |
 | `bolt/workflows/smlv_somatic/prepare.py` | bcftools-based VCF prep; no unit tests |
 | `bolt/workflows/smlv_germline/prepare.py` | bcftools-based panel region selection; no unit tests |
 | `bolt/workflows/smlv_germline/report.py` | bcftools stats + CPSR report generation; no unit tests |

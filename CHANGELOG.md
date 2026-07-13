@@ -2,6 +2,7 @@
 
 ## 0.3.2
 
+- Fix: `rescue.py`'s SAGE VCF header-consistency check compared the DRAGEN input VCF's headers against the expected SAGE header descriptions instead of the actual SAGE VCF's — the check ran but validated nothing (introduced [24](https://github.com/umccr/bolt/pull/24)). Now checks `sage_vcf_fp`. First-ever test coverage added for `rescue.py` and for `util.check_annotation_headers`
 - Fix: hypermutated `report` samples (tiered-selection path) never disabled `--estimate_msi`/`--estimate_tmb` — TMB/MSI were computed on a trimmed variant subset with no indication in the report. Now passes `disable_estimates=True` when `select_pcgr_variants` trims input, matching `run_somatic_chunk`'s existing chunked-input behavior
 - Fix: `get_annotations_vcf` crashed with `AssertionError` on a duplicate PCGR VCF key (variant mapping to multiple transcripts) — now logs a warning and keeps the first entry ([34](https://github.com/umccr/bolt/pull/34))
 - Fix: `collect_pcgr_annotation_data` / `collect_cpsr_annotation_data` had the same duplicate-key `AssertionError` on their TSV paths — somatic path now keeps the most actionable tier on a duplicate, germline/CPSR path keeps the first entry; both warn instead of crashing

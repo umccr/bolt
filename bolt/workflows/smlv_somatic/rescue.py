@@ -125,7 +125,7 @@ def annotate_existing_sage_calls(input_fp, tumor_name, sage_vcf_fp, output_dir):
         constants.VcfFilter.SAGE_LOWCONF: 'SAGE_LOWCONF',
     }
 
-    util.check_annotation_headers(info_field_map_sage, input_fp)
+    util.check_annotation_headers(info_field_map_sage, sage_vcf_fp)
 
     # Add header entries so that they are included in the output file via templating done below
     util.add_vcf_header_entry(input_fh, constants.VcfFilter.SAGE_LOWCONF)
