@@ -1,4 +1,5 @@
 """Tests for hypermutated sample handling — tier ordering fix and variant trimming."""
+import gzip
 import pathlib
 import shutil
 import tempfile
@@ -438,6 +439,64 @@ class TestRunSomaticChunkArgMapping(unittest.TestCase):
                              'threads (max_threads) was not forwarded correctly')
             self.assertEqual(kw.get('chunk_nbr'), 1,
                              'chunk_nbr was not forwarded correctly')
+
+
+class TestMergingPcgrFiles(unittest.TestCase):
+    """Regression test for bolt #26: bcftools merge requires 2+ inputs.
+
+    When a sample's variants fit in a single PCGR chunk, run_somatic_chunk still
+    called merging_pcgr_files() -> util.merge_vcf_files() unconditionally, which
+    invoked `bcftools merge` on a single VCF and errored (Usage: bcftools merge
+    [options] <A.vcf.gz> <B.vcf.gz> [...]).
+    """
+
+    def _write_gz_vcf(self, path, variants):
+        vcf_path = path.with_suffix('')
+        _write_vcf(vcf_path, variants)
+        util.execute_command(f'bcftools view -Oz -o {path} {vcf_path}')
+        util.execute_command(f'bcftools index -t {path}')
+
+    def test_single_chunk_skips_bcftools_merge(self):
+        """A single VCF chunk must bypass bcftools merge and pass through directly."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = pathlib.Path(tmp)
+            vcf_fp = tmp_path / 'chunk1.vcf.gz'
+            self._write_gz_vcf(vcf_fp, [(10, f'PCGR_CSQ={_csq("intron_variant")}')])
+
+            tsv_fp = tmp_path / 'chunk1.tsv.gz'
+            with gzip.open(tsv_fp, 'wt') as fh:
+                fh.write('col1\tcol2\nval1\tval2\n')
+
+            merged_vcf, merged_tsv = pcgr.merging_pcgr_files(tmp_path, [vcf_fp], [tsv_fp])
+
+            self.assertTrue(pathlib.Path(merged_vcf).exists())
+            self.assertEqual(_count_vcf(merged_vcf), 1)
+            self.assertTrue(pathlib.Path(f'{merged_vcf}.tbi').exists(),
+                             'Single-chunk pass-through VCF must still be tabix indexed')
+            self.assertTrue(pathlib.Path(merged_tsv).exists())
+
+    def test_multiple_chunks_still_merge(self):
+        """Two or more chunks must still go through bcftools merge as before."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = pathlib.Path(tmp)
+            vcf1_fp = tmp_path / 'chunk1.vcf.gz'
+            vcf2_fp = tmp_path / 'chunk2.vcf.gz'
+            self._write_gz_vcf(vcf1_fp, [(10, f'PCGR_CSQ={_csq("intron_variant")}')])
+            self._write_gz_vcf(vcf2_fp, [(20, f'PCGR_CSQ={_csq("intron_variant")}')])
+
+            tsv1_fp = tmp_path / 'chunk1.tsv.gz'
+            tsv2_fp = tmp_path / 'chunk2.tsv.gz'
+            with gzip.open(tsv1_fp, 'wt') as fh:
+                fh.write('col1\tcol2\nval1\tval2\n')
+            with gzip.open(tsv2_fp, 'wt') as fh:
+                fh.write('col1\tcol2\nval3\tval4\n')
+
+            merged_vcf, merged_tsv = pcgr.merging_pcgr_files(
+                tmp_path, [vcf1_fp, vcf2_fp], [tsv1_fp, tsv2_fp]
+            )
+
+            self.assertTrue(pathlib.Path(merged_vcf).exists())
+            self.assertTrue(pathlib.Path(merged_tsv).exists())
 
 
 class TestCountVariantProcess(unittest.TestCase):

@@ -589,7 +589,14 @@ def merging_pcgr_files(output_dir, pcgr_vcf_files, pcgr_tsv_files):
 
     # Step 5: Merge all VCF files into a single file in the pcgr directory
     merged_vcf_path = pcgr_dir / "nosampleset.pcgr.grch38.pass"
-    merged_vcf = util.merge_vcf_files(pcgr_vcf_files, merged_vcf_path)
+    if len(pcgr_vcf_files) == 1:
+        # NOTE(QC): bcftools merge requires 2+ inputs; with a single chunk there is
+        # nothing to merge, so use that chunk directly as the merged output (bolt #26)
+        merged_vcf = merged_vcf_path.parent / f'{merged_vcf_path.name}.vcf.gz'
+        shutil.copy(pcgr_vcf_files[0], merged_vcf)
+        util.execute_command(f'bcftools index -t {merged_vcf}')
+    else:
+        merged_vcf = util.merge_vcf_files(pcgr_vcf_files, merged_vcf_path)
 
     return merged_vcf, merged_tsv_fp
 
