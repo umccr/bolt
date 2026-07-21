@@ -1,4 +1,3 @@
-
 import csv
 import functools
 import gzip
