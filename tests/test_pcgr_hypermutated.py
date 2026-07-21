@@ -136,6 +136,44 @@ class TestSelectPcgrVariants(unittest.TestCase):
             count = self._run(v, limit=5, tmp=tmp)
             self.assertEqual(count, 5)
 
+    def test_exactly_at_limit_nothing_dropped(self):
+        """When variant count == MAX_SOMATIC_VARIANTS, no filtering occurs.
+
+        This documents the boundary: the check is `<=` so exactly-at-limit passes through.
+        Ensures bolt doesn't accidentally trigger PCGR's own 500k internal filter when
+        MAX_SOMATIC_VARIANTS < 500k.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            # 5 variants, limit=5 → no filtering needed
+            v = []
+            for i in range(1, 4):   # 3 TIER_1
+                v.append((i*10, f'PCGR_ACTIONABILITY_TIER=1;PCGR_CSQ={_csq("intron_variant")}'))
+            for i in range(4, 6):   # 2 NONCODING
+                v.append((i*10, f'PCGR_ACTIONABILITY_TIER=N;PCGR_CSQ={_csq("intergenic_variant")}'))
+            count = self._run(v, limit=5, tmp=tmp)
+            self.assertEqual(count, 5)  # All survive — exactly at limit
+
+    def test_one_over_limit_drops_lowest_priority_category(self):
+        """When variant count is limit+1, the lowest-priority category is dropped entirely.
+
+        This tests the coarse-grained nature of the filter: we drop whole categories,
+        so output may undershoot the limit significantly. This is by design — it keeps
+        the logic simple and deterministic, and the 450k→500k margin ensures PCGR's
+        own internal filter (which drops intergenic/intronic indiscriminately) never fires.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            # 6 variants (limit=5): 3 TIER_1 + 3 NONCODING
+            # One over limit → all 3 NONCODING dropped → output = 3 (undershoots limit)
+            v = []
+            for i in range(1, 4):   # 3 TIER_1
+                v.append((i*10, f'PCGR_ACTIONABILITY_TIER=1;PCGR_CSQ={_csq("intron_variant")}'))
+            for i in range(4, 7):   # 3 NONCODING
+                v.append((i*10, f'PCGR_ACTIONABILITY_TIER=N;PCGR_CSQ={_csq("intergenic_variant")}'))
+            count = self._run(v, limit=5, tmp=tmp)
+            # All 3 NONCODING dropped (whole category), only 3 TIER_1 remain
+            self.assertEqual(count, 3)
+            self.assertLessEqual(count, 5)
+
     def test_hotspots_never_dropped_by_tiered_filter(self):
         """Hotspot variants must survive tiered filtering.
 
