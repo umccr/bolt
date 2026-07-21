@@ -28,9 +28,18 @@ RUN \
 # 4f0cf477), so this test image exercises the real dragen_hrd-optional/%||% fix
 # instead of the published release. Deps already resolved by the conda install
 # above, so install with dependencies=FALSE to avoid conda/CRAN version conflicts.
+#
+# gpgr's .Rbuildignore excludes inst/rmd from `R CMD build` (and therefore from
+# `remotes::install_github`, which builds a tarball under the hood) — the published
+# conda package must include it via a different build path. Copy it back in manually
+# after install so gpgr.R canrep can still find cancer_report.Rmd via system.file().
 RUN \
-  conda install --prefix /env/ r-remotes && \
-  conda run --prefix /env/ Rscript -e "remotes::install_github('umccr/gpgr@4f0cf4779a9f9cd7e76108ca4dfdd7d024fc9d73', dependencies = FALSE, upgrade = 'never')"
+  conda install --prefix /env/ r-remotes git && \
+  conda run --prefix /env/ Rscript -e "remotes::install_github('umccr/gpgr@4f0cf4779a9f9cd7e76108ca4dfdd7d024fc9d73', dependencies = FALSE, upgrade = 'never')" && \
+  git clone --quiet https://github.com/umccr/gpgr.git /tmp/gpgr-src/ && \
+  cd /tmp/gpgr-src && git checkout --quiet 4f0cf4779a9f9cd7e76108ca4dfdd7d024fc9d73 && \
+  cp -r /tmp/gpgr-src/inst/rmd /env/lib/R/library/gpgr/ && \
+  rm -rf /tmp/gpgr-src
 
 COPY ./ /tmp/bolt/
 RUN \
