@@ -24,6 +24,14 @@ RUN \
     'bioconductor-txdb.hsapiens.ucsc.hg38.knowngene ==3.16.0' \
     'bioconductor-genomeinfodbdata ==1.2.9'
 
+# NOTE(eval): swap conda's published r-gpgr 2.3.1 for gpgr PR #102's branch (commit
+# 4f0cf477), so this test image exercises the real dragen_hrd-optional/%||% fix
+# instead of the published release. Deps already resolved by the conda install
+# above, so install with dependencies=FALSE to avoid conda/CRAN version conflicts.
+RUN \
+  conda install --prefix /env/ r-remotes && \
+  conda run --prefix /env/ Rscript -e "remotes::install_github('umccr/gpgr@4f0cf4779a9f9cd7e76108ca4dfdd7d024fc9d73', dependencies = FALSE, upgrade = 'never')"
+
 COPY ./ /tmp/bolt/
 RUN \
   conda run --prefix /env/ pip install --no-deps /tmp/bolt/
