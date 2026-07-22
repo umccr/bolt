@@ -1,3 +1,4 @@
+import collections
 import csv
 import json
 import pathlib
@@ -6,11 +7,14 @@ import pathlib
 import click
 import cyvcf2
 import yaml
+import logging
 
 
 from ... import util
 from ...common import constants
 from ...common import pcgr
+from ...logging_config import setup_logging
+logger = logging.getLogger(__name__)
 
 
 @click.command(name='report')
@@ -27,6 +31,7 @@ from ...common import pcgr
 @click.option('--pcgrr_conda', required=False, type=str)
 
 @click.option('--pcgr_data_dir', required=False, type=str)
+@click.option('--vep_dir', required=True, type=click.Path(exists=True))
 @click.option('--purple_purity_fp', required=True, type=click.Path(exists=True))
 
 @click.option('--cancer_genes_fp', required=True, type=click.Path(exists=True))
@@ -45,6 +50,9 @@ def entry(ctx, **kwargs):
     output_dir = pathlib.Path(kwargs['output_dir'])
     output_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
 
+    script_name = pathlib.Path(__file__).stem
+    setup_logging(output_dir, script_name)
+
     # BCFtools stats
     bcftools_vcf_fp = bcftools_stats_prepare(kwargs['vcf_fp'], kwargs['tumor_name'], output_dir)
     run_bcftools_stats(bcftools_vcf_fp, kwargs['tumor_name'], output_dir)
@@ -62,7 +70,7 @@ def entry(ctx, **kwargs):
     # Variant type counts
     # NOTE(SW): this is intended to preserve counts in the MultiQC report
     variant_counts_types_dragen = count_variant_types(kwargs['vcf_dragen_fp'])
-    variant_counts_types_bolt= count_variant_types(kwargs['vcf_fp'])
+    variant_counts_types_bolt = count_variant_types(kwargs['vcf_fp'])
 
     # NOTE(SW): using pass variants only for now
 
@@ -107,17 +115,29 @@ def entry(ctx, **kwargs):
     # PCGR report
     purple_data = parse_purple_purity_file(kwargs['purple_purity_fp'])
 
+    if variant_counts_process['filter_pass'] <= constants.MAX_SOMATIC_VARIANTS:
+        pcgr_input_vcf_fp = kwargs['vcf_fp']
+    else:
+        pcgr_input_vcf_fp = select_pcgr_variants(
+            kwargs['vcf_fp'],
+            kwargs['cancer_genes_fp'],
+            kwargs['tumor_name'],
+            output_dir,
+        )
+
     pcgr_prep_fp = pcgr.prepare_vcf_somatic(
-        kwargs['vcf_fp'],
+        pcgr_input_vcf_fp,
         kwargs['tumor_name'],
         kwargs['normal_name'],
         output_dir,
     )
 
+    pcgr_output_dir = output_dir / 'pcgr'
     pcgr.run_somatic(
         pcgr_prep_fp,
         kwargs['pcgr_data_dir'],
-        output_dir,
+        kwargs['vep_dir'],
+        pcgr_output_dir,
         threads=kwargs['threads'],
         pcgr_conda=kwargs['pcgr_conda'],
         pcgrr_conda=kwargs['pcgrr_conda'],
@@ -143,7 +163,7 @@ def bcftools_stats_prepare(input_fp, tumor_name, output_dir):
         elif record.INFO.get('SAGE_NOVEL') is not None:
             record.QUAL = None
         else:
-            assert False
+            raise AssertionError(f'Record at {record.CHROM}:{record.POS} has neither SQ nor SAGE_NOVEL — cannot determine QUAL')
 
         output_fh.write_record(record)
 
@@ -153,8 +173,8 @@ def bcftools_stats_prepare(input_fp, tumor_name, output_dir):
 def run_bcftools_stats(input_fp, tumor_name, output_dir):
     output_fp = output_dir / f'{tumor_name}.somatic.bcftools_stats.txt'
     command = fr'''
-        bcftools stats {input_fp} | \
-            sed '6 s#{input_fp}$#{tumor_name}#' > {output_fp}
+        bcftools stats '{input_fp}' | \
+            sed '6 s#{input_fp}$#{tumor_name}#' > '{output_fp}'
     '''
     util.execute_command(command)
 
@@ -281,7 +301,104 @@ def count_variant_process(vcf_fp):
         if not record.FILTER or rescued_filters:
             counts['filter_pass'] += 1
 
+    counts['is_hypermutated'] = counts['dragen'] > constants.MAX_SOMATIC_VARIANTS
     return counts
+
+
+def select_pcgr_variants(vcf_fp, cancer_genes_fp, tumor_name, output_dir):
+    """Filter variants for hypermutated samples to stay below PCGR's 500k limit.
+
+    Retained variants (hotspot / panel) are skipped for tiered filtering. The remaining
+    variants are classified by (tier, impact, region) and categories are dropped in
+    priority order — NONCODING first, TIER_1 last — until the count falls within
+    MAX_SOMATIC_VARIANTS. Raises RuntimeError if the limit cannot be reached (i.e.
+    retained variants alone exceed it).
+
+    Returns the path to the pass VCF (variants that survived filtering). A second
+    traceability VCF with FILTER=PCGR_count_limit set on dropped variants is written
+    alongside it.
+    """
+    # Annotate variants in UMCCR somatic gene panel
+    fp_annotated_out = output_dir / f'{tumor_name}.umccr_panel_variants_annotated.vcf.gz'
+    util.execute_command(fr'''
+        bcftools annotate \
+            --annotations <(awk 'BEGIN {{ OFS="\t" }} {{ print $1, $2-2000, $3+2000, "1" }}' {cancer_genes_fp}) \
+            --header-line '{util.get_vcf_header_line(constants.VcfInfo.PANEL)}' \
+            --columns CHROM,FROM,TO,{constants.VcfInfo.PANEL.value} \
+            --output {fp_annotated_out} \
+            {vcf_fp}
+    ''')
+
+    # Set filter category for each variant
+    variants_sorted = collections.defaultdict(list)
+    variant_count = 0
+
+    for variant_count, variant in enumerate(cyvcf2.VCF(fp_annotated_out), 1):
+        variant_repr = pcgr.get_variant_repr(variant)
+
+        if any(variant.INFO.get(e) for e in constants.RETAIN_FIELDS_FILTERING):
+            continue
+
+        data = pcgr.get_variant_filter_data(variant)
+        variant_filter = pcgr.determine_filter(data)
+        if not variant_filter:
+            raise AssertionError(
+                f'determine_filter returned no category for variant {variant_repr} (data={data})'
+            )
+
+        filter_category = (data['tier'], *variant_filter)
+        variants_sorted[filter_category].append(variant_repr)
+
+    # Determine the filter categories needed to bring the count under MAX_SOMATIC_VARIANTS
+    filter_sum = 0
+    filter_categories = list()
+    for key in pcgr.get_ordering():
+        if (variant_count - filter_sum) <= constants.MAX_SOMATIC_VARIANTS:
+            break
+        filter_sum += len(variants_sorted.get(key, []))
+        filter_categories.append(key)
+
+    filter_variants = set()
+    for key in filter_categories:
+        filter_variants.update(variants_sorted[key])
+
+    expected_output = variant_count - len(filter_variants)
+    if expected_output > constants.MAX_SOMATIC_VARIANTS:
+        raise RuntimeError(
+            f'select_pcgr_variants failed to cap variants for {tumor_name}: '
+            f'{expected_output} > {constants.MAX_SOMATIC_VARIANTS}'
+        )
+
+    logger.info('%s: select_pcgr_variants total=%d filtered=%d output=%d',
+                tumor_name, variant_count, len(filter_variants), expected_output)
+
+    # Write passing variants; write all variants (with FILTER set) for traceability.
+    # Re-opening the original vcf_fp (not fp_annotated_out) so that the temporary
+    # PANEL annotation used for tiered filtering is not propagated to PCGR input.
+    fh_in = cyvcf2.VCF(vcf_fp)
+    util.add_vcf_header_entry(fh_in, constants.VcfFilter.PCGR_COUNT_LIMIT)
+
+    # NOTE(SW): creating an additional VCF with all records for traceability
+    fp_out = output_dir / f'{tumor_name}.pcgr_hypermutated.pass.vcf.gz'
+    fp_set_out = output_dir / f'{tumor_name}.pcgr_hypermutated.filters_set.vcf.gz'
+
+    fh_out = cyvcf2.Writer(fp_out, fh_in, 'wz')
+    fh_set_out = cyvcf2.Writer(fp_set_out, fh_in, 'wz')
+
+    for variant in fh_in:
+        variant_repr = pcgr.get_variant_repr(variant)
+        if variant_repr not in filter_variants:
+            # Write only passing
+            fh_out.write_record(variant)
+        else:
+            variant.FILTER = constants.VcfFilter.PCGR_COUNT_LIMIT.value
+        # Write all variants including those with FILTER set
+        fh_set_out.write_record(variant)
+
+    fh_out.close()
+    fh_set_out.close()
+
+    return fp_out
 
 
 def parse_purple_purity_file(fp):

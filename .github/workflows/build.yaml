@@ -17,6 +17,22 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Free Disk Space (Ubuntu)
+        uses: jlumbroso/free-disk-space@main
+        with:
+          # this might remove tools that are actually needed,
+          # if set to "true" but frees about 6 GB
+          tool-cache: false
+
+          # all of these default to true, but feel free to set to
+          # "false" if necessary for your workflow
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: true
+
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -27,7 +43,8 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build and push image
+      - name: Build image
+        id: build
         run: |
           if [[ "${{ matrix.build_name }}" == "base" ]]; then
             docker_tag=bolt:${GITHUB_REF_NAME#v};
@@ -37,10 +54,26 @@ jobs:
             dockerfile_fn=Dockerfile.${{ matrix.build_name }};
           fi;
 
-          # Build and push to GHCR umccr registry
           docker build \
             --platform linux/amd64 \
+            --load \
             -f docker/${dockerfile_fn} \
             -t ghcr.io/umccr/${docker_tag} \
-            --push \
             .;
+
+          echo "docker_tag=ghcr.io/umccr/${docker_tag}" >> $GITHUB_OUTPUT
+
+      - name: Smoke test
+        run: |
+          docker run --rm ${{ steps.build.outputs.docker_tag }} bolt --version
+
+          case "${{ matrix.build_name }}" in
+            multiqc) docker run --rm ${{ steps.build.outputs.docker_tag }} multiqc --version ;;
+            gpgr)    docker run --rm ${{ steps.build.outputs.docker_tag }} Rscript -e 'library(gpgr); cat("gpgr ok\n")' ;;
+            pcgr)    docker run --rm ${{ steps.build.outputs.docker_tag }} conda run --no-capture-output -n pcgr pcgr --version ;;
+            snpeff)  docker run --rm ${{ steps.build.outputs.docker_tag }} bash -c 'snpEff -version 2>&1 | head -1' ;;
+            circos)  docker run --rm ${{ steps.build.outputs.docker_tag }} circos --version ;;
+          esac
+
+      - name: Push image
+        run: docker push ${{ steps.build.outputs.docker_tag }}

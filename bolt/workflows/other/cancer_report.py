@@ -5,6 +5,9 @@ import click
 
 
 from ... import util
+from ...logging_config import setup_logging
+
+
 
 
 @click.command(name='cancer_report')
@@ -28,6 +31,10 @@ from ... import util
 
 @click.option('--purple_dir', required=True, type=click.Path(exists=True))
 @click.option('--virusbreakend_dir', required=True, type=click.Path(exists=True))
+@click.option('--mutpat_dir', required=True, type=click.Path(exists=True))
+
+@click.option('--hrdetect_file', required=True, type=click.Path(exists=True))
+@click.option('--chord_file', required=True, type=click.Path(exists=True))
 
 @click.option('--dragen_hrd_fp', required=False, type=click.Path(exists=True))
 
@@ -44,6 +51,9 @@ def entry(ctx, **kwargs):
     output_dir = pathlib.Path(kwargs['output_dir'])
     output_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
 
+    script_name = pathlib.Path(__file__).stem
+    setup_logging(output_dir, script_name)
+
     # Normalise SAGE variants and remove duplicates that arise for MutationalPattern compatibility
     decomposed_snv_vcf = normalise_and_dedup_sage_variants(
         kwargs['smlv_somatic_vcf_fp'],
@@ -59,7 +69,7 @@ def entry(ctx, **kwargs):
     )
 
     # Set other required argument values
-    batch_name = f'{kwargs["subject_name"]}_{kwargs["tumor_name"]}'
+    batch_name = f"{kwargs['subject_name']}_{kwargs['tumor_name']}"
     output_table_dir = output_dir / 'cancer_report_tables'
 
     # Optional dragen hrd argument
@@ -98,6 +108,10 @@ def entry(ctx, **kwargs):
             \
             --key_genes {kwargs['cancer_genes_fp']} \
             --oncokb_genes {kwargs['oncokb_genes_fp']} \
+            \
+            --mutpat_dir {kwargs['mutpat_dir']} \
+            --hrdetect_file {kwargs['hrdetect_file']} \
+            --chord_file {kwargs['chord_file']} \
             \
             --img_dir {output_image_dir}/ \
             --result_outdir {output_table_dir}/ \

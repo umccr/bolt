@@ -7,10 +7,14 @@ import pathlib
 
 import click
 import cyvcf2
+import logging
 
 
 from ... import util
 from ...common import constants
+from ...logging_config import setup_logging
+
+logger = logging.getLogger(__name__)
 
 
 @click.command(name='rescue')
@@ -36,6 +40,9 @@ def entry(ctx, **kwargs):
     # Create output directory
     output_dir = pathlib.Path(kwargs['output_dir'])
     output_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
+
+    script_name = pathlib.Path(__file__).stem
+    setup_logging(output_dir, script_name)
 
     # Select PASS SAGE variants in hotspots and then split into existing and novel calls
     sage_pass_vcf_fp = select_sage_pass_hotspot(
@@ -106,20 +113,28 @@ def annotate_existing_sage_calls(input_fp, tumor_name, sage_vcf_fp, output_dir):
     # Get input file handle
     input_fh = cyvcf2.VCF(input_fp)
 
+    # Define expected SAGE annotations used for VCF header consistency check
+    info_field_map_sage = {
+        constants.VcfInfo.SAGE_HOTSPOT: 'SAGE_HOTSPOT',
+        constants.VcfInfo.SAGE_NOVEL: 'SAGE_NOVEL',
+        constants.VcfInfo.SAGE_RESCUE: 'SAGE_RESCUE',
+        constants.VcfFormat.SAGE_AD: 'SAGE_AD',
+        constants.VcfFormat.SAGE_AF: 'SAGE_AF',
+        constants.VcfFormat.SAGE_DP: 'SAGE_DP',
+        constants.VcfFormat.SAGE_SB: 'SAGE_SB',
+        constants.VcfFilter.SAGE_LOWCONF: 'SAGE_LOWCONF',
+    }
+
+    util.check_annotation_headers(info_field_map_sage, input_fp)
+
     # Add header entries so that they are included in the output file via templating done below
     util.add_vcf_header_entry(input_fh, constants.VcfFilter.SAGE_LOWCONF)
-
     util.add_vcf_header_entry(input_fh, constants.VcfInfo.SAGE_HOTSPOT)
     util.add_vcf_header_entry(input_fh, constants.VcfInfo.SAGE_RESCUE)
-
-    # TODO(SW): check that defined header descriptions match those in the SAGE fp; collect as list
-    # here and iterate to check and then add to input_fp header also in another loop
-
     util.add_vcf_header_entry(input_fh, constants.VcfFormat.SAGE_AD)
     util.add_vcf_header_entry(input_fh, constants.VcfFormat.SAGE_AF)
     util.add_vcf_header_entry(input_fh, constants.VcfFormat.SAGE_DP)
     util.add_vcf_header_entry(input_fh, constants.VcfFormat.SAGE_SB)
-
     # Open output file and use header from input file
     output_fp = output_dir / f'{tumor_name}.anno.vcf.gz'
     output_fh = cyvcf2.Writer(output_fp, input_fh, 'wz')
