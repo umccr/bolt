@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 @click.option('--vcf_fp', required=True, type=click.Path(exists=True))
 @click.option('--vcf_filters_fp', required=True, type=click.Path(exists=True))
-@click.option('--vcf_dragen_fp', required=True, type=click.Path(exists=True))
+@click.option('--vcf_dragen_fp', required=False, default=None, type=click.Path(exists=True))
 
 @click.option('--pcgr_conda', required=False, type=str)
 @click.option('--pcgrr_conda', required=False, type=str)
@@ -69,29 +69,37 @@ def entry(ctx, **kwargs):
 
     # Variant type counts
     # NOTE(SW): this is intended to preserve counts in the MultiQC report
-    variant_counts_types_dragen = count_variant_types(kwargs['vcf_dragen_fp'])
     variant_counts_types_bolt = count_variant_types(kwargs['vcf_fp'])
 
     # NOTE(SW): using pass variants only for now
 
-    variant_count_type_proportions = dict()
-    for k in {*variant_counts_types_dragen['pass'], *variant_counts_types_bolt['pass']}:
-        assert k not in variant_count_type_proportions
-        if (count_dragen := variant_counts_types_dragen['pass'][k]) == 0:
-            variant_count_type_proportions[k] = 0
-        elif (count_bolt := variant_counts_types_bolt['pass'][k]) == 0:
-            variant_count_type_proportions[k] = 0
-        else:
-            variant_count_type_proportions[k] = (count_dragen - count_bolt) / count_dragen * 100
+    if kwargs['vcf_dragen_fp']:
+        variant_counts_types_dragen = count_variant_types(kwargs['vcf_dragen_fp'])
+        variant_count_type_proportions = dict()
+        for k in {*variant_counts_types_dragen['pass'], *variant_counts_types_bolt['pass']}:
+            assert k not in variant_count_type_proportions
+            if (count_dragen := variant_counts_types_dragen['pass'][k]) == 0:
+                variant_count_type_proportions[k] = 0
+            elif (count_bolt := variant_counts_types_bolt['pass'][k]) == 0:
+                variant_count_type_proportions[k] = 0
+            else:
+                variant_count_type_proportions[k] = (count_dragen - count_bolt) / count_dragen * 100
+        filt_vars = variant_count_type_proportions['total']
+        filt_snps = variant_count_type_proportions['snps']
+        filt_indels = variant_count_type_proportions['indels']
+        filt_others = variant_count_type_proportions['others']
+    else:
+        # OA-only mode — no dragen VCF available; filter proportions not computed
+        filt_vars = filt_snps = filt_indels = filt_others = None
 
     variant_count_data = {
         'snps': variant_counts_types_bolt['pass']['snps'],
         'indels': variant_counts_types_bolt['pass']['indels'],
         'others': variant_counts_types_bolt['pass']['others'],
-        'filt_vars': variant_count_type_proportions['total'],
-        'filt_snps': variant_count_type_proportions['snps'],
-        'filt_indels': variant_count_type_proportions['indels'],
-        'filt_others': variant_count_type_proportions['others'],
+        'filt_vars': filt_vars,
+        'filt_snps': filt_snps,
+        'filt_indels': filt_indels,
+        'filt_others': filt_others,
     }
 
     variant_counts_type_output_fn = f'{kwargs["tumor_name"]}.somatic.variant_counts_type.yaml'
@@ -153,20 +161,28 @@ def bcftools_stats_prepare(input_fp, tumor_name, output_dir):
     output_fp = output_dir / f'{tumor_name}.somatic.bcftools_stats.vcf.gz'
     output_fh = cyvcf2.Writer(output_fp, input_fh, 'wz')
 
+    try:
+        has_sq_format = input_fh.get_header_type('SQ')['HeaderType'] == 'FORMAT'
+    except KeyError:
+        has_sq_format = False
+
     tumor_index = input_fh.samples.index(tumor_name)
     for record in input_fh:
-        # NOTE(SW): SAGE and DRAGEN quality scores are not comparable; we only get stats of DRAGEN
-        # FORMAT/SQ
-        if (tumor_sq_value := record.format('SQ')) is not None:
-            # Round SQ so that BCFtools stats uses integers on x-axis
-            record.QUAL = round(tumor_sq_value[tumor_index,0])
-        elif record.INFO.get('SAGE_NOVEL') is not None:
-            record.QUAL = None
-        else:
-            raise AssertionError(f'Record at {record.CHROM}:{record.POS} has neither SQ nor SAGE_NOVEL — cannot determine QUAL')
+        if has_sq_format:
+            # NOTE(SW): SAGE and DRAGEN quality scores are not comparable; we only get stats of DRAGEN FORMAT/SQ
+            if (tumor_sq_value := record.format('SQ')) is not None:
+                # Round SQ so that BCFtools stats uses integers on x-axis
+                record.QUAL = round(tumor_sq_value[tumor_index, 0])
+            elif record.INFO.get('SAGE_NOVEL') is not None:
+                record.QUAL = None
+            else:
+                raise AssertionError(f'Record at {record.CHROM}:{record.POS} has neither SQ nor SAGE_NOVEL — cannot determine QUAL')
+        # else: OA-only mode — no SQ field; keep existing QUAL from SAGE
 
         output_fh.write_record(record)
 
+    output_fh.close()
+    input_fh.close()
     return output_fp
 
 
@@ -349,7 +365,7 @@ def select_pcgr_variants(vcf_fp, cancer_genes_fp, tumor_name, output_dir):
         filter_category = (data['tier'], *variant_filter)
         variants_sorted[filter_category].append(variant_repr)
 
-    # Determine the filter categories needed to bring the count under MAX_SOMATIC_VARIANTS
+    # Determine the set of filter categories to come under the PCGR 500,000 variant threshold
     filter_sum = 0
     filter_categories = list()
     for key in pcgr.get_ordering():

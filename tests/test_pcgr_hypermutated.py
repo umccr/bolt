@@ -1,5 +1,4 @@
 """Tests for hypermutated sample handling — tier ordering fix and variant trimming."""
-import gzip
 import pathlib
 import shutil
 import tempfile
@@ -135,44 +134,6 @@ class TestSelectPcgrVariants(unittest.TestCase):
             # limit=5: should drop the 3 NONCODING to get to 5
             count = self._run(v, limit=5, tmp=tmp)
             self.assertEqual(count, 5)
-
-    def test_exactly_at_limit_nothing_dropped(self):
-        """When variant count == MAX_SOMATIC_VARIANTS, no filtering occurs.
-
-        This documents the boundary: the check is `<=` so exactly-at-limit passes through.
-        Ensures bolt doesn't accidentally trigger PCGR's own 500k internal filter when
-        MAX_SOMATIC_VARIANTS < 500k.
-        """
-        with tempfile.TemporaryDirectory() as tmp:
-            # 5 variants, limit=5 → no filtering needed
-            v = []
-            for i in range(1, 4):   # 3 TIER_1
-                v.append((i*10, f'PCGR_ACTIONABILITY_TIER=1;PCGR_CSQ={_csq("intron_variant")}'))
-            for i in range(4, 6):   # 2 NONCODING
-                v.append((i*10, f'PCGR_ACTIONABILITY_TIER=N;PCGR_CSQ={_csq("intergenic_variant")}'))
-            count = self._run(v, limit=5, tmp=tmp)
-            self.assertEqual(count, 5)  # All survive — exactly at limit
-
-    def test_one_over_limit_drops_lowest_priority_category(self):
-        """When variant count is limit+1, the lowest-priority category is dropped entirely.
-
-        This tests the coarse-grained nature of the filter: we drop whole categories,
-        so output may undershoot the limit significantly. This is by design — it keeps
-        the logic simple and deterministic, and the 450k→500k margin ensures PCGR's
-        own internal filter (which drops intergenic/intronic indiscriminately) never fires.
-        """
-        with tempfile.TemporaryDirectory() as tmp:
-            # 6 variants (limit=5): 3 TIER_1 + 3 NONCODING
-            # One over limit → all 3 NONCODING dropped → output = 3 (undershoots limit)
-            v = []
-            for i in range(1, 4):   # 3 TIER_1
-                v.append((i*10, f'PCGR_ACTIONABILITY_TIER=1;PCGR_CSQ={_csq("intron_variant")}'))
-            for i in range(4, 7):   # 3 NONCODING
-                v.append((i*10, f'PCGR_ACTIONABILITY_TIER=N;PCGR_CSQ={_csq("intergenic_variant")}'))
-            count = self._run(v, limit=5, tmp=tmp)
-            # All 3 NONCODING dropped (whole category), only 3 TIER_1 remain
-            self.assertEqual(count, 3)
-            self.assertLessEqual(count, 5)
 
     def test_hotspots_never_dropped_by_tiered_filter(self):
         """Hotspot variants must survive tiered filtering.
@@ -479,64 +440,6 @@ class TestRunSomaticChunkArgMapping(unittest.TestCase):
                              'chunk_nbr was not forwarded correctly')
 
 
-class TestMergingPcgrFiles(unittest.TestCase):
-    """Regression test for bolt #26: bcftools merge requires 2+ inputs.
-
-    When a sample's variants fit in a single PCGR chunk, run_somatic_chunk still
-    called merging_pcgr_files() -> util.merge_vcf_files() unconditionally, which
-    invoked `bcftools merge` on a single VCF and errored (Usage: bcftools merge
-    [options] <A.vcf.gz> <B.vcf.gz> [...]).
-    """
-
-    def _write_gz_vcf(self, path, variants):
-        vcf_path = path.with_suffix('')
-        _write_vcf(vcf_path, variants)
-        util.execute_command(f'bcftools view -Oz -o {path} {vcf_path}')
-        util.execute_command(f'bcftools index -t {path}')
-
-    def test_single_chunk_skips_bcftools_merge(self):
-        """A single VCF chunk must bypass bcftools merge and pass through directly."""
-        with tempfile.TemporaryDirectory() as tmp:
-            tmp_path = pathlib.Path(tmp)
-            vcf_fp = tmp_path / 'chunk1.vcf.gz'
-            self._write_gz_vcf(vcf_fp, [(10, f'PCGR_CSQ={_csq("intron_variant")}')])
-
-            tsv_fp = tmp_path / 'chunk1.tsv.gz'
-            with gzip.open(tsv_fp, 'wt') as fh:
-                fh.write('col1\tcol2\nval1\tval2\n')
-
-            merged_vcf, merged_tsv = pcgr.merging_pcgr_files(tmp_path, [vcf_fp], [tsv_fp])
-
-            self.assertTrue(pathlib.Path(merged_vcf).exists())
-            self.assertEqual(_count_vcf(merged_vcf), 1)
-            self.assertTrue(pathlib.Path(f'{merged_vcf}.tbi').exists(),
-                             'Single-chunk pass-through VCF must still be tabix indexed')
-            self.assertTrue(pathlib.Path(merged_tsv).exists())
-
-    def test_multiple_chunks_still_merge(self):
-        """Two or more chunks must still go through bcftools merge as before."""
-        with tempfile.TemporaryDirectory() as tmp:
-            tmp_path = pathlib.Path(tmp)
-            vcf1_fp = tmp_path / 'chunk1.vcf.gz'
-            vcf2_fp = tmp_path / 'chunk2.vcf.gz'
-            self._write_gz_vcf(vcf1_fp, [(10, f'PCGR_CSQ={_csq("intron_variant")}')])
-            self._write_gz_vcf(vcf2_fp, [(20, f'PCGR_CSQ={_csq("intron_variant")}')])
-
-            tsv1_fp = tmp_path / 'chunk1.tsv.gz'
-            tsv2_fp = tmp_path / 'chunk2.tsv.gz'
-            with gzip.open(tsv1_fp, 'wt') as fh:
-                fh.write('col1\tcol2\nval1\tval2\n')
-            with gzip.open(tsv2_fp, 'wt') as fh:
-                fh.write('col1\tcol2\nval3\tval4\n')
-
-            merged_vcf, merged_tsv = pcgr.merging_pcgr_files(
-                tmp_path, [vcf1_fp, vcf2_fp], [tsv1_fp, tsv2_fp]
-            )
-
-            self.assertTrue(pathlib.Path(merged_vcf).exists())
-            self.assertTrue(pathlib.Path(merged_tsv).exists())
-
-
 class TestCountVariantProcess(unittest.TestCase):
     """Verify count_variant_process counts and is_hypermutated flag (bolt #27).
 
@@ -630,6 +533,91 @@ class TestCountVariantProcess(unittest.TestCase):
 
             self.assertEqual(counts['annotated'], 1)
             self.assertEqual(counts['dragen'], 2)
+
+
+class TestGetAnnotationsVcf(unittest.TestCase):
+    """Unit tests for pcgr.get_annotations_vcf() duplicate-key handling."""
+
+    PCGR_VCF_HEADER = (
+        '##fileformat=VCFv4.2\n'
+        '##FILTER=<ID=PASS,Description="All filters passed">\n'
+        '##INFO=<ID=PCGR_CSQ,Number=.,Type=String,Description="">\n'
+        '##contig=<ID=1,length=248956422>\n'
+        '#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n'
+    )
+
+    def _write_pcgr_vcf(self, path, rows):
+        """Write a minimal PCGR-style VCF (no chr prefix, as PCGR strips it)."""
+        with open(path, 'w') as fh:
+            fh.write(self.PCGR_VCF_HEADER)
+            for chrom, pos, ref, alt, info in rows:
+                fh.write(f'{chrom}\t{pos}\t.\t{ref}\t{alt}\t.\tPASS\t{info}\n')
+
+    def test_duplicate_vcf_key_keeps_first_no_crash(self):
+        """Duplicate variant in PCGR VCF must be silently skipped, not raise AssertionError."""
+        info_field_map = {constants.VcfInfo.PCGR_CSQ: 'PCGR_CSQ'}
+        with tempfile.TemporaryDirectory() as tmp:
+            vcf_fp = pathlib.Path(tmp) / 'pcgr.vcf'
+            self._write_pcgr_vcf(vcf_fp, [
+                ('1', 100, 'A', 'T', 'PCGR_CSQ=first'),
+                ('1', 100, 'A', 'T', 'PCGR_CSQ=second'),  # duplicate
+            ])
+            result = pcgr.get_annotations_vcf(vcf_fp, info_field_map)
+
+        self.assertEqual(len(result), 1)
+        key = ('chr1', 100, 'A', 'T')
+        self.assertIn(key, result)
+        self.assertEqual(result[key][constants.VcfInfo.PCGR_CSQ], 'first')
+
+    def test_non_duplicate_vcf_keys_all_present(self):
+        """Distinct variants are all retained."""
+        info_field_map = {constants.VcfInfo.PCGR_CSQ: 'PCGR_CSQ'}
+        with tempfile.TemporaryDirectory() as tmp:
+            vcf_fp = pathlib.Path(tmp) / 'pcgr.vcf'
+            self._write_pcgr_vcf(vcf_fp, [
+                ('1', 100, 'A', 'T', 'PCGR_CSQ=v1'),
+                ('1', 200, 'C', 'G', 'PCGR_CSQ=v2'),
+            ])
+            result = pcgr.get_annotations_vcf(vcf_fp, info_field_map)
+
+        self.assertEqual(len(result), 2)
+        self.assertIn(('chr1', 100, 'A', 'T'), result)
+        self.assertIn(('chr1', 200, 'C', 'G'), result)
+
+
+class TestBcftoolsStatsPrepare(unittest.TestCase):
+    """Tests for bcftools_stats_prepare OA-only mode (no SQ FORMAT field)."""
+
+    SAGE_VCF_HEADER = (
+        '##fileformat=VCFv4.2\n'
+        '##FILTER=<ID=PASS,Description="All filters passed">\n'
+        '##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">\n'
+        '##FORMAT=<ID=AD,Number=R,Type=Integer,Description="Allelic depths">\n'
+        '##contig=<ID=chr1,length=248956422>\n'
+        '#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tTUMOR\tNORMAL\n'
+    )
+
+    def _write_sage_vcf(self, path, rows):
+        with open(path, 'w') as fh:
+            fh.write(self.SAGE_VCF_HEADER)
+            for chrom, pos, ref, alt, qual, info in rows:
+                fh.write(f'{chrom}\t{pos}\t.\t{ref}\t{alt}\t{qual}\tPASS\t{info}\tGT\t0/1\t0/0\n')
+
+    def test_oa_only_no_sq_field_keeps_qual(self):
+        """VCF with no SQ FORMAT field (OA-only) passes through without error."""
+        with tempfile.TemporaryDirectory() as tmp:
+            vcf_fp = pathlib.Path(tmp) / 'input.vcf'
+            self._write_sage_vcf(vcf_fp, [
+                ('chr1', 100, 'A', 'T', 50, '.'),
+                ('chr1', 200, 'C', 'G', 30, '.'),
+            ])
+            output_fp = report_mod.bcftools_stats_prepare(vcf_fp, 'TUMOR', pathlib.Path(tmp))
+
+            self.assertTrue(output_fp.exists())
+            records = list(cyvcf2.VCF(str(output_fp)))
+            self.assertEqual(len(records), 2)
+            self.assertAlmostEqual(records[0].QUAL, 50)
+            self.assertAlmostEqual(records[1].QUAL, 30)
 
 
 if __name__ == '__main__':

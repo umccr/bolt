@@ -4,11 +4,6 @@ import enum
 ######################################
 ## Variation selection (annotation) ##
 ######################################
-
-# Cap below PCGR's 500k limit. PCGR silently drops variants or skips HTML
-# generation above 500k, and its multi-allelic decomposition can inflate
-# variant count beyond what bolt outputs. 50k margin absorbs this safely.
-# See: docs/adr/001-max-somatic-variants-450k.md
 MAX_SOMATIC_VARIANTS = 450_000
 MAX_SOMATIC_VARIANTS_GNOMAD_FILTER = 0.01
 
@@ -58,6 +53,15 @@ PCGR_TIERS_FILTERING = (
     '2',
     '1',
 )
+
+# Map raw PCGR ACTIONABILITY_TIER strings (after upper() + underscore→space) to normalised short forms.
+# Any unrecognised value normalises to 'N' (non-coding / no tier).
+PCGR_TIER_NORMALISE = {
+    'TIER 1': '1', 'TIER1': '1', '1': '1',
+    'TIER 2': '2', 'TIER2': '2', '2': '2',
+    'TIER 3': '3', 'TIER3': '3', '3': '3',
+    'TIER 4': '4', 'TIER4': '4', '4': '4',
+}
 
 VEP_IMPACTS_FILTER = (
     'intergenic',

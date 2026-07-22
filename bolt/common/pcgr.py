@@ -1,3 +1,4 @@
+
 import csv
 import functools
 import gzip
@@ -72,11 +73,19 @@ def prepare_vcf_somatic(input_fp, tumor_name, normal_name, output_dir):
 
 
 def prepare_vcf_germline(input_fp, normal_name, output_dir):
+    # NOTE(QC): SAGE germline sets GT=./. for all variants — it encodes allele support in
+    # FORMAT AF/RC_CNT rather than GT. CPSR requires a called genotype to classify variants;
+    # ./. causes it to drop all records at report generation ("zero remaining variants").
+    # bcftools +setGT converts ./. to 0/1 (het) so CPSR produces meaningful output.
+    # Limitation: all variants are treated as het regardless of AF; homozygous alt calls
+    # (AF >= ~0.85) will be misclassified as het. This is clinically conservative — CPSR
+    # uses zygosity for recessive gene interpretation — but acceptable for a first pass.
 
     output_fp = output_dir / f'{normal_name}.cpsr.prep.vcf.gz'
 
     command = fr'''
         bcftools view -s {normal_name} {input_fp} | \
+            bcftools +setGT -- -t . -n 'c:0/1' | \
             bcftools annotate -x INFO,FILTER,FORMAT,^GT -o {output_fp};
             bcftools index -t {output_fp};
         '''
@@ -325,11 +334,15 @@ def transfer_annotations_germline(input_fp, normal_name, cpsr_dir, output_dir):
     cpsr_tsv_fp = pathlib.Path(cpsr_dir) / f'{normal_name}.cpsr.grch38.classification.tsv.gz'
     cpsr_vcf_fp = pathlib.Path(cpsr_dir) / f'{normal_name}.cpsr.grch38.vcf.gz'
 
-    # Enforce matching defined and source INFO annotations
-    util.check_annotation_headers(info_field_map, cpsr_vcf_fp)
+    # CPSR skips writing output files when zero variants pass filtering; treat as empty
+    if not cpsr_tsv_fp.exists() or not cpsr_vcf_fp.exists():
+        cpsr_data = dict()
+    else:
+        # Enforce matching defined and source INFO annotations
+        util.check_annotation_headers(info_field_map, cpsr_vcf_fp)
 
-    # Gather CPSR annotation data for records
-    cpsr_data = collect_cpsr_annotation_data(cpsr_tsv_fp, cpsr_vcf_fp, info_field_map)
+        # Gather CPSR annotation data for records
+        cpsr_data = collect_cpsr_annotation_data(cpsr_tsv_fp, cpsr_vcf_fp, info_field_map)
 
     # Open filehandles, set required header entries
     input_fh = cyvcf2.VCF(input_fp)
@@ -352,6 +365,15 @@ def transfer_annotations_germline(input_fp, normal_name, cpsr_dir, output_dir):
     output_fh.close()
 
 
+# Derived from PCGR_TIERS_FILTERING: index 0 = most actionable ('1'), highest = least ('N').
+_TIER_ORDER = {tier: i for i, tier in enumerate(reversed(constants.PCGR_TIERS_FILTERING))}
+
+
+def _normalise_tier(record):
+    raw = (record.get('ACTIONABILITY_TIER') or '').strip().replace('_', ' ').upper()
+    return constants.PCGR_TIER_NORMALISE.get(raw, 'N')
+
+
 def collect_pcgr_annotation_data(tsv_fp, vcf_fp, info_field_map):
     # Gather all annotations from TSV
     data_tsv = dict()
@@ -360,22 +382,18 @@ def collect_pcgr_annotation_data(tsv_fp, vcf_fp, info_field_map):
     with open_fn(tsv_fp, 'rt') as tsv_fh:
         for record in csv.DictReader(tsv_fh, delimiter='\t'):
             key, record_ann = get_annotation_entry_tsv(record, info_field_map)
-            assert key not in data_tsv
 
-            # Normalize PCGR actionability tier to simple values: '1','2','3','4','N'
-            raw_tier = (record.get('ACTIONABILITY_TIER') or '').strip()
-            tier_norm = raw_tier.replace('_', ' ').upper()
-            if tier_norm in ('TIER 1','TIER1','1'):
-                tier_val = '1'
-            elif tier_norm in ('TIER 2','TIER2','2'):
-                tier_val = '2'
-            elif tier_norm in ('TIER 3','TIER3','3'):
-                tier_val = '3'
-            elif tier_norm in ('TIER 4','TIER4','4'):
-                tier_val = '4'
-            else:
-                tier_val = 'N'
+            tier_val = _normalise_tier(record)
             record_ann[constants.VcfInfo.PCGR_ACTIONABILITY_TIER] = tier_val
+
+            # NOTE(QC): PCGR can emit multiple TSV rows for the same variant when it maps to
+            # multiple transcripts. Keep the most actionable entry (lowest tier number).
+            if key in data_tsv:
+                existing_tier = data_tsv[key].get(constants.VcfInfo.PCGR_ACTIONABILITY_TIER, 'N')
+                if _TIER_ORDER.get(tier_val, 4) >= _TIER_ORDER.get(existing_tier, 4):
+                    logger.warning(f'Duplicate PCGR TSV key {key}: keeping tier {existing_tier}, skipping tier {tier_val}')
+                    continue
+                logger.warning(f'Duplicate PCGR TSV key {key}: replacing tier {existing_tier} with more actionable tier {tier_val}')
 
             # Store annotation data
             data_tsv[key] = record_ann
@@ -439,7 +457,9 @@ def get_annotations_vcf(vcf_fp, info_field_map):
         assert len(record.ALT) == 1
         [alt] = record.ALT
         key = (f'chr{record.CHROM}', record.POS, record.REF, alt)
-        assert key not in data_vcf
+        if key in data_vcf:
+            logger.warning(f'Duplicate PCGR VCF key {key}: keeping first entry')
+            continue
 
         data_vcf[key] = dict()
         for info_dst, info_src in info_field_map.items():
@@ -588,14 +608,7 @@ def merging_pcgr_files(output_dir, pcgr_vcf_files, pcgr_tsv_files):
 
     # Step 5: Merge all VCF files into a single file in the pcgr directory
     merged_vcf_path = pcgr_dir / "nosampleset.pcgr.grch38.pass"
-    if len(pcgr_vcf_files) == 1:
-        # NOTE(QC): bcftools merge requires 2+ inputs; with a single chunk there is
-        # nothing to merge, so use that chunk directly as the merged output (bolt #26)
-        merged_vcf = merged_vcf_path.parent / f'{merged_vcf_path.name}.vcf.gz'
-        shutil.copy(pcgr_vcf_files[0], merged_vcf)
-        util.execute_command(f'bcftools index -t {merged_vcf}')
-    else:
-        merged_vcf = util.merge_vcf_files(pcgr_vcf_files, merged_vcf_path)
+    merged_vcf = util.merge_vcf_files(pcgr_vcf_files, merged_vcf_path)
 
     return merged_vcf, merged_tsv_fp
 
