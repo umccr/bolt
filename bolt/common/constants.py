@@ -4,6 +4,11 @@ import enum
 ######################################
 ## Variation selection (annotation) ##
 ######################################
+
+# Cap below PCGR's 500k limit. PCGR silently drops variants or skips HTML
+# generation above 500k, and its multi-allelic decomposition can inflate
+# variant count beyond what bolt outputs. 50k margin absorbs this safely.
+# See: docs/adr/001-max-somatic-variants-450k.md
 MAX_SOMATIC_VARIANTS = 450_000
 MAX_SOMATIC_VARIANTS_GNOMAD_FILTER = 0.01
 

@@ -1,4 +1,3 @@
-
 import csv
 import functools
 import gzip
@@ -15,6 +14,7 @@ import cyvcf2
 from .. import util
 from ..common import constants
 
+# Use the existing logger configuration
 logger = logging.getLogger(__name__)
 
 def prepare_vcf_somatic(input_fp, tumor_name, normal_name, output_dir):
@@ -129,6 +129,7 @@ def run_somatic(input_fp, pcgr_refdata_dir, vep_dir, output_dir, chunk_nbr=None,
         logger.warning(f"Output directory '{output_dir}' already exists and will be overwritten")
         shutil.rmtree(output_dir)
 
+    # Create output directory
     output_dir.mkdir(parents=True, exist_ok=True)
 
     if not sample_id:
@@ -227,6 +228,7 @@ def run_germline(input_fp, panel_fp, pcgr_refdata_dir, vep_dir, output_dir, thre
         logger.warning(f"Output directory '{cpsr_output_dir}' already exists and will be overwritten")
         shutil.rmtree(cpsr_output_dir)
 
+    # Create output directory
     cpsr_output_dir.mkdir(parents=True, exist_ok=True)
 
     command_args = [

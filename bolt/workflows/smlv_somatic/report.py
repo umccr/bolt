@@ -364,7 +364,7 @@ def select_pcgr_variants(vcf_fp, cancer_genes_fp, tumor_name, output_dir):
         filter_category = (data['tier'], *variant_filter)
         variants_sorted[filter_category].append(variant_repr)
 
-    # Determine the set of filter categories to come under the PCGR 500,000 variant threshold
+    # Determine the filter categories needed to bring the count under MAX_SOMATIC_VARIANTS
     filter_sum = 0
     filter_categories = list()
     for key in pcgr.get_ordering():

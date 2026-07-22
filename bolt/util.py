@@ -11,6 +11,7 @@ import cyvcf2
 
 from .common import constants
 
+# Set up logging
 logger = logging.getLogger(__name__)
 
 # TODO(SW): create note that number this assumes location of `<root>/<package>/<file>`
