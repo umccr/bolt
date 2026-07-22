@@ -146,7 +146,8 @@ def run_somatic(input_fp, pcgr_refdata_dir, vep_dir, output_dir, chunk_nbr=None,
         f'--control_af_tag NORMAL_AF',
         f'--genome_assembly grch38',
         f'--assay WGS',
-        *([] if disable_estimates else ['--estimate_signatures', '--estimate_msi', '--estimate_tmb']),
+        # NOTE: --estimate_signatures dropped (umccr/sash#57); keep msi/tmb.
+        *([] if disable_estimates else ['--estimate_msi', '--estimate_tmb']),
         f'--vcfanno_n_proc {vcfanno_threads}',
         f'--vep_n_forks {vep_forks}',
         f'--vep_pick_order biotype,rank,appris,tsl,ccds,canonical,length,mane_plus_clinical,mane_select',
@@ -352,6 +353,25 @@ def transfer_annotations_germline(input_fp, normal_name, cpsr_dir, output_dir):
     output_fh.close()
 
 
+# Lower value = more clinically actionable. Used to resolve duplicate PCGR TSV
+# rows for the same variant (PCGR can emit one row per transcript mapping).
+_TIER_ORDER = {'1': 0, '2': 1, '3': 2, '4': 3, 'N': 4}
+
+
+def _normalise_tier(raw_tier):
+    # Normalize PCGR actionability tier to simple values: '1','2','3','4','N'
+    tier_norm = (raw_tier or '').strip().replace('_', ' ').upper()
+    if tier_norm in ('TIER 1', 'TIER1', '1'):
+        return '1'
+    elif tier_norm in ('TIER 2', 'TIER2', '2'):
+        return '2'
+    elif tier_norm in ('TIER 3', 'TIER3', '3'):
+        return '3'
+    elif tier_norm in ('TIER 4', 'TIER4', '4'):
+        return '4'
+    return 'N'
+
+
 def collect_pcgr_annotation_data(tsv_fp, vcf_fp, info_field_map):
     # Gather all annotations from TSV
     data_tsv = dict()
@@ -360,22 +380,18 @@ def collect_pcgr_annotation_data(tsv_fp, vcf_fp, info_field_map):
     with open_fn(tsv_fp, 'rt') as tsv_fh:
         for record in csv.DictReader(tsv_fh, delimiter='\t'):
             key, record_ann = get_annotation_entry_tsv(record, info_field_map)
-            assert key not in data_tsv
-
-            # Normalize PCGR actionability tier to simple values: '1','2','3','4','N'
-            raw_tier = (record.get('ACTIONABILITY_TIER') or '').strip()
-            tier_norm = raw_tier.replace('_', ' ').upper()
-            if tier_norm in ('TIER 1','TIER1','1'):
-                tier_val = '1'
-            elif tier_norm in ('TIER 2','TIER2','2'):
-                tier_val = '2'
-            elif tier_norm in ('TIER 3','TIER3','3'):
-                tier_val = '3'
-            elif tier_norm in ('TIER 4','TIER4','4'):
-                tier_val = '4'
-            else:
-                tier_val = 'N'
+            tier_val = _normalise_tier(record.get('ACTIONABILITY_TIER'))
             record_ann[constants.VcfInfo.PCGR_ACTIONABILITY_TIER] = tier_val
+
+            # NOTE(QC): PCGR can emit multiple TSV rows for the same variant when it
+            # maps to multiple transcripts. Keep the most actionable entry (lowest
+            # tier number) rather than asserting. See https://github.com/umccr/bolt/pull/34
+            if key in data_tsv:
+                existing_tier = data_tsv[key][constants.VcfInfo.PCGR_ACTIONABILITY_TIER]
+                if _TIER_ORDER[tier_val] >= _TIER_ORDER[existing_tier]:
+                    logger.warning(f'Duplicate PCGR TSV key {key}: keeping tier {existing_tier}, skipping tier {tier_val}')
+                    continue
+                logger.warning(f'Duplicate PCGR TSV key {key}: replacing tier {existing_tier} with more actionable tier {tier_val}')
 
             # Store annotation data
             data_tsv[key] = record_ann
@@ -404,7 +420,15 @@ def collect_cpsr_annotation_data(tsv_fp, vcf_fp, info_field_map):
             record['ALT'] = re_result.group('alt')
 
             key, record_ann = get_annotation_entry_tsv(record, info_field_map)
-            assert key not in data_tsv
+
+            # NOTE(QC): CPSR can emit multiple TSV rows for the same variant when it
+            # maps to multiple transcripts (same class of issue as the PCGR somatic
+            # TSV path above). CPSR rows carry no actionability tier to break ties
+            # on, so keep the first entry and warn. See https://github.com/umccr/bolt/pull/34
+            if key in data_tsv:
+                logger.warning(f'Duplicate CPSR TSV key {key}: keeping first entry')
+                continue
+
             data_tsv[key] = record_ann
 
     # Gather annotations from VCF
@@ -414,18 +438,14 @@ def collect_cpsr_annotation_data(tsv_fp, vcf_fp, info_field_map):
     return compile_annotation_data(data_tsv, data_vcf)
 
 def parse_genomic_change(genomic_change):
-    """
-    Parse a genomic change string, e.g., "3:g.41224645T>C"
-    Returns a tuple: (chrom, pos, ref, alt)
-    """
-    # Regular expression for the format "chrom:g.posRef>Alt"
+    # Format: "chrom:g.posRef>Alt" e.g. "3:g.41224645T>C"
     pattern = r'^(?P<chrom>\w+):g\.(?P<pos>\d+)(?P<ref>\w+)>(?P<alt>\w+)$'
     match = re.match(pattern, genomic_change)
     if not match:
         raise ValueError(f"Format not recognized: {genomic_change}")
-    
-    # Get values and format as needed
-    chrom = f"chr{match.group('chrom')}"
+    chrom = match.group('chrom')
+    if not chrom.startswith('chr'):
+        chrom = f'chr{chrom}'
     pos = int(match.group('pos'))
     ref = match.group('ref')
     alt = match.group('alt')
@@ -439,7 +459,14 @@ def get_annotations_vcf(vcf_fp, info_field_map):
         assert len(record.ALT) == 1
         [alt] = record.ALT
         key = (f'chr{record.CHROM}', record.POS, record.REF, alt)
-        assert key not in data_vcf
+
+        # NOTE(QC): PCGR can emit duplicate variant entries in its output VCF when a
+        # variant maps to multiple transcripts. Keep the first entry and warn rather
+        # than asserting, consistent with the TSV-side dedup.
+        # https://github.com/umccr/bolt/pull/34
+        if key in data_vcf:
+            logger.warning(f'Duplicate PCGR VCF key {key}: keeping first entry')
+            continue
 
         data_vcf[key] = dict()
         for info_dst, info_src in info_field_map.items():
@@ -505,7 +532,7 @@ def annotate_record(record, annotations, *, allow_missing=False):
         if allow_missing:
             return record
         else:
-            assert key not in annotations
+            assert False, f'Missing annotation key: {key}'
 
     # Transfer annotations
     for info_enum, v in annotations[key].items():
@@ -514,11 +541,6 @@ def annotate_record(record, annotations, *, allow_missing=False):
     return record
 
 def split_vcf(input_vcf, output_dir, *, max_variants=None):
-    """
-    Splits a VCF file into multiple chunks, each containing up to max_variants variants.
-    Each chunk includes the VCF header.
-    Ensures no overlapping positions between chunks.
-    """
     if max_variants is None:
         max_variants = constants.MAX_SOMATIC_VARIANTS
     elif max_variants <= 0:
@@ -566,27 +588,25 @@ def split_vcf(input_vcf, output_dir, *, max_variants=None):
 def run_somatic_chunk(vcf_chunks, pcgr_data_dir, vep_dir, output_dir, pcgr_output_dir, max_threads, pcgr_conda, pcgrr_conda):
     pcgr_tsv_files = []
     pcgr_vcf_files = []
-    
-    # Process each chunk sequentially
+
     for chunk_number, vcf_file in enumerate(vcf_chunks, start=1):
-        pcgr_tsv_fp, pcgr_vcf_fp = run_somatic(vcf_file, pcgr_data_dir, vep_dir, pcgr_output_dir, chunk_nbr=chunk_number, threads=max_threads, pcgr_conda=pcgr_conda, pcgrr_conda=pcgrr_conda)
+        pcgr_tsv_fp, pcgr_vcf_fp = run_somatic(vcf_file, pcgr_data_dir, vep_dir, pcgr_output_dir, chunk_nbr=chunk_number, threads=max_threads, pcgr_conda=pcgr_conda, pcgrr_conda=pcgrr_conda, disable_estimates=True)
         if pcgr_tsv_fp:
             pcgr_tsv_files.append(pcgr_tsv_fp)
         if pcgr_vcf_fp:
             pcgr_vcf_files.append(pcgr_vcf_fp)
-    
+
     merged_vcf_fp, merged_tsv_fp = merging_pcgr_files(output_dir, pcgr_vcf_files, pcgr_tsv_files)
     return merged_tsv_fp, merged_vcf_fp
+
 
 def merging_pcgr_files(output_dir, pcgr_vcf_files, pcgr_tsv_files):
     pcgr_dir = pathlib.Path(output_dir) / 'pcgr'
     pcgr_dir.mkdir(exist_ok=True)
 
-    # Merge all TSV files into a single file in the pcgr directory
     merged_tsv_fp = pcgr_dir / "nosampleset.pcgr_acmg.grch38.snvs_indels.tiers.tsv.gz"
     util.merge_tsv_files(pcgr_tsv_files, merged_tsv_fp)
 
-    # Step 5: Merge all VCF files into a single file in the pcgr directory
     merged_vcf_path = pcgr_dir / "nosampleset.pcgr.grch38.pass"
     if len(pcgr_vcf_files) == 1:
         # NOTE(QC): bcftools merge requires 2+ inputs; with a single chunk there is

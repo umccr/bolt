@@ -115,36 +115,50 @@ def entry(ctx, **kwargs):
     # PCGR report
     purple_data = parse_purple_purity_file(kwargs['purple_purity_fp'])
 
-    if variant_counts_process['filter_pass'] <= constants.MAX_SOMATIC_VARIANTS:
+    pcgr_skipped = False
+    pcgr_input_trimmed = variant_counts_process['filter_pass'] > constants.MAX_SOMATIC_VARIANTS
+    if not pcgr_input_trimmed:
         pcgr_input_vcf_fp = kwargs['vcf_fp']
     else:
-        pcgr_input_vcf_fp = select_pcgr_variants(
-            kwargs['vcf_fp'],
-            kwargs['cancer_genes_fp'],
+        try:
+            pcgr_input_vcf_fp = select_pcgr_variants(
+                kwargs['vcf_fp'],
+                kwargs['cancer_genes_fp'],
+                kwargs['tumor_name'],
+                output_dir,
+            )
+        except RuntimeError as e:
+            # NOTE(QC): tiered filtering could not bring PASS count below
+            # MAX_SOMATIC_VARIANTS (sash #52). Skip PCGR; sash marks the
+            # PCGR emits as optional so downstream reports still publish.
+            logger.warning(f'Skipping PCGR for {kwargs["tumor_name"]}: {e}')
+            pcgr_skipped = True
+
+    if not pcgr_skipped:
+        pcgr_prep_fp = pcgr.prepare_vcf_somatic(
+            pcgr_input_vcf_fp,
             kwargs['tumor_name'],
+            kwargs['normal_name'],
             output_dir,
         )
 
-    pcgr_prep_fp = pcgr.prepare_vcf_somatic(
-        pcgr_input_vcf_fp,
-        kwargs['tumor_name'],
-        kwargs['normal_name'],
-        output_dir,
-    )
-
-    pcgr_output_dir = output_dir / 'pcgr'
-    pcgr.run_somatic(
-        pcgr_prep_fp,
-        kwargs['pcgr_data_dir'],
-        kwargs['vep_dir'],
-        pcgr_output_dir,
-        threads=kwargs['threads'],
-        pcgr_conda=kwargs['pcgr_conda'],
-        pcgrr_conda=kwargs['pcgrr_conda'],
-        purity=purple_data['purity'],
-        ploidy=purple_data['ploidy'],
-        sample_id=kwargs['tumor_name'],
-    )
+        pcgr_output_dir = output_dir / 'pcgr'
+        pcgr.run_somatic(
+            pcgr_prep_fp,
+            kwargs['pcgr_data_dir'],
+            kwargs['vep_dir'],
+            pcgr_output_dir,
+            threads=kwargs['threads'],
+            pcgr_conda=kwargs['pcgr_conda'],
+            pcgrr_conda=kwargs['pcgrr_conda'],
+            purity=purple_data['purity'],
+            ploidy=purple_data['ploidy'],
+            sample_id=kwargs['tumor_name'],
+            # NOTE(QC): pcgr_input_vcf_fp is a tiered-selection subset when
+            # pcgr_input_trimmed, so TMB/MSI estimates on it are not meaningful —
+            # same reasoning as run_somatic_chunk's chunked inputs.
+            disable_estimates=pcgr_input_trimmed,
+        )
 
 
 def bcftools_stats_prepare(input_fp, tumor_name, output_dir):
@@ -336,7 +350,8 @@ def select_pcgr_variants(vcf_fp, cancer_genes_fp, tumor_name, output_dir):
     for variant_count, variant in enumerate(cyvcf2.VCF(fp_annotated_out), 1):
         variant_repr = pcgr.get_variant_repr(variant)
 
-        if any(variant.INFO.get(e) for e in constants.RETAIN_FIELDS_FILTERING):
+        # NOTE(QC): exclude '.' — PCGR writes it as a missing-value placeholder for String fields; cyvcf2 returns it truthy (sash #52).
+        if any(variant.INFO.get(e) not in (None, '.') for e in constants.RETAIN_FIELDS_FILTERING):
             continue
 
         data = pcgr.get_variant_filter_data(variant)

@@ -1,5 +1,23 @@
 # bolt changelog
 
+## 0.3.2
+
+- Fix: `rescue.py`'s SAGE VCF header-consistency check compared the DRAGEN input VCF's headers against the expected SAGE header descriptions instead of the actual SAGE VCF's — the check ran but validated nothing (introduced [24](https://github.com/umccr/bolt/pull/24)). Now checks `sage_vcf_fp`. First-ever test coverage added for `rescue.py` and for `util.check_annotation_headers`
+- Fix: hypermutated `report` samples (tiered-selection path) never disabled `--estimate_msi`/`--estimate_tmb` — TMB/MSI were computed on a trimmed variant subset with no indication in the report. Now passes `disable_estimates=True` when `select_pcgr_variants` trims input, matching `run_somatic_chunk`'s existing chunked-input behavior
+- Fix: `get_annotations_vcf` crashed with `AssertionError` on a duplicate PCGR VCF key (variant mapping to multiple transcripts) — now logs a warning and keeps the first entry ([34](https://github.com/umccr/bolt/pull/34))
+- Fix: `collect_pcgr_annotation_data` / `collect_cpsr_annotation_data` had the same duplicate-key `AssertionError` on their TSV paths — somatic path now keeps the most actionable tier on a duplicate, germline/CPSR path keeps the first entry; both warn instead of crashing
+- Test: `TestGetAnnotationsVcf`, `TestCollectPcgrAnnotationData`, `TestCollectCpsrAnnotationData` — duplicate-key regression coverage for all three annotation-collection paths
+- Test: `TestMergeVcfFiles` — bcftools-guarded integration test proving `merge_vcf_files` (`bcftools merge -m all`) losslessly reassembles PCGR sites-only chunk VCFs (no loss/dup, position-sorted, indexed output). Locks the sites-only invariant that keeps `bcftools merge` safe for the hypermutated chunk-merge path; documented with a `NOTE` in `merge_vcf_files`
+- [32](https://github.com/umccr/bolt/pull/32) - Fix `PCGR_MUTATION_HOTSPOT=.` (dot placeholder) treated as truthy in retention check — was preventing tiered filtering from running for any sample with >450k PASS variants ([sash#52](https://github.com/umccr/sash/issues/52))
+- [32](https://github.com/umccr/bolt/pull/32) - Graceful PCGR skip when `select_pcgr_variants` cannot cap variants to `MAX_SOMATIC_VARIANTS` — logs warning and continues without cancer report; non-PCGR outputs still publish ([sash#52](https://github.com/umccr/sash/issues/52))
+- Fix: disable `--estimate_msi`/`--estimate_tmb` in chunked PCGR annotation runs — estimates on partial VCFs are not meaningful
+- Fix: pin `jlumbroso/free-disk-space` CI action to `v1.3.0` (was `@main`)
+- Test: `TestSelectPcgrVariants` — 8 integration tests covering tiered trimming, hotspot retention, PANEL retention, NONCODING-first drop order, and the `PCGR_MUTATION_HOTSPOT=.` regression
+- Test: `TestEntrySkipsPcgrOnOverflow` — 2 tests: entry() skips PCGR on `RuntimeError` from unresolvable overflow; entry() calls PCGR normally when within limit
+- Test: `TestSelectPcgrVariantsRaisesOnUnresolvableOverflow` — asserts `RuntimeError` when retained variants alone exceed `MAX_SOMATIC_VARIANTS`
+- Test: `TestRunSomaticCommandArgs` — 2 tests: `--estimate_signatures` absent from all `run_somatic` commands; `disable_estimates=True` suppresses `--estimate_msi`/`--estimate_tmb`
+- Test: `TestRunSomaticChunkArgMapping.test_disable_estimates_passed_to_run_somatic` — `run_somatic_chunk` passes `disable_estimates=True` to every `run_somatic` call
+
 ## 0.3.1
 
 - Fix `ModuleNotFoundError: No module named 'pkg_resources'` in `bolt:0.3.0-multiqc` — add `setuptools <81` to conda env
@@ -7,18 +25,27 @@
 - Fix VCF writers not closed in `transfer_annotations_somatic` and `transfer_annotations_germline` — BGZip output could be truncated
 - Fix `split_vcf` writing uncompressed plain `.vcf` chunks — now uses `.vcf.gz` with `wz` mode
 - Fix `PCGR_ACTIONABILITY_TIER` VCF header description — updated to match stored short-form values (`1`,`2`,`3`,`4`,`N`)
-- Add regression test for chunk file compression (`test_chunks_are_gzipped`)
+- Fix `split_vcf` chunks not tabix-indexed, causing PCGR to fail reading them
+- Fix `build.yaml` and `Dockerfile.pcgr` build issues
+- Remove unused `logging` import and fix `PCGR_MAX_SOMATIC_VARIANTS` header description in `constants.py`
+- Bump `r-gpgr` to 2.3.1 in `Dockerfile.gpgr`
+- Add CI smoke tests to catch Docker image startup failures before push
+- [31](https://github.com/umccr/bolt/pull/31) - Drop `--estimate_signatures` from PCGR somatic invocation — signature analysis comes from gpgr/sigrap downstream; keep `--estimate_msi`/`--estimate_tmb` ([sash#57](https://github.com/umccr/sash/issues/57))
+- Test: regression test for chunk file compression (`test_chunks_are_gzipped`)
+- Test: regression test for chunk tabix indexing (`test_chunks_are_tabix_indexed`)
+- Test: `TestTierOrdering` — 3 tests verifying `PCGR_TIERS_FILTERING` uses short forms (`N`,`4`,`3`,`2`,`1`) and NONCODING precedes TIER_1 in `get_ordering()`
+- Test: `TestSplitVcf` — 4 tests: chunking above/below limit, `.vcf.gz` compression, `.tbi` indexing
+- Test: `TestSelectPcgrVariants` — initial 6 integration tests for tiered trimming logic
+- Test: `TestGetVariantFilterData`, `TestDetermineFilter`, `TestGetImpacts` — 14 unit tests covering variant attribute extraction and filter-category determination
+- Test: `TestCountVariantProcess` — 4 tests: `is_hypermutated` flag, DRAGEN count, SAGE_NOVEL exclusion, annotation-filter exclusion
+- Test: `TestRunSomaticChunkArgMapping` — asserts `pcgr_conda` is not shifted into `pcgr_threads` position on positional arg mapping
 
 ## 0.3.0
 
 - [28](https://github.com/umccr/bolt/pull/28) - gpgr version bump to 2.2.12 for cancer report hypermutated flag fix
 
 - [17](https://github.com/umccr/bolt/pull/17) - change dragen HRD file optional
-
 - [14](https://github.com/umccr/bolt/pull/14) - gpgr version bump to 2.2.0
-
 - [3](https://github.com/scwatts/bolt/pull/3) - Improve PCGR / CPSR argument handling
-
 - [6](https://github.com/umccr/bolt/pull/6) - Change oncoanalyser v2.0.0 update, with switch sv caller from GRIPSS to eSVee
-
 - [9](https://github.com/umccr/bolt/pull/9) Add hypermutation sample handling

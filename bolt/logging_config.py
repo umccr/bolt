@@ -28,7 +28,8 @@ def setup_logging(output_dir, script_name):
     logging.basicConfig(
         level=logging.DEBUG,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[file_handler, console_handler]
+        handlers=[file_handler, console_handler],
+        force=True,
     )
     logger = logging.getLogger(__name__)
     logger.info("Logging setup complete")

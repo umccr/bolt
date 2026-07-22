@@ -23,7 +23,6 @@ def get_project_root():
 
 
 def execute_command(command, log_file_path=None):
-    # set -e: exit on error, -u: exit on unset variable, -o pipefail: pipeline fails if any command fails
     prepared_command = f'set -euo pipefail; {textwrap.dedent(command)}'
     logger.info("Executing command: %s", command.strip())
 
@@ -129,15 +128,10 @@ def get_qualified_vcf_annotation(anno_enum):
     return f'{anno_enum.namespace}/{anno_enum.value}'
 
 def merge_tsv_files(tsv_files, merged_tsv_fp):
-    """
-    Merge gzipped TSV files into a single gzipped TSV.
-    """
-
     with gzip.open(merged_tsv_fp, 'wt', encoding='utf-8') as merged_tsv:
         for i, tsv_file in enumerate(tsv_files):
             with gzip.open(tsv_file, 'rt', encoding='utf-8') as infile:
                 for line_number, line in enumerate(infile):
-                    # Skip header except for the first file
                     if i > 0 and line_number == 0:
                         continue
                     merged_tsv.write(line)
@@ -145,43 +139,32 @@ def merge_tsv_files(tsv_files, merged_tsv_fp):
 
 
 def merge_vcf_files(vcf_files, merged_vcf_fp):
-    """
-    Merges multiple VCF files into a single sorted VCF file using bcftools.
-
-    Parameters:
-    - vcf_files: List of paths to VCF files to be merged.
-    - merged_vcf_fp: Path to the output merged VCF file (without extension).
-
-    Returns:
-    - Path to the sorted merged VCF file.
-    """
+    # NOTE(QC): reassembles PCGR hypermutated chunk outputs. `bcftools merge` is
+    # a multi-sample joiner and would fail with "Duplicate sample names" on
+    # same-named inputs that carry a genotype column — but this is safe here
+    # because PCGR inputs/outputs are sites-only (pcgr.prepare_vcf_somatic /
+    # get_minimal_header strip all FORMAT and sample columns), so merge just
+    # produces the union of disjoint chunks. Do not switch to a genotype-bearing
+    # VCF upstream without revisiting this. Locked by tests/test_util.py
+    # TestMergeVcfFiles (bcftools-guarded lossless/sorted regression test).
     merged_vcf_fp = pathlib.Path(merged_vcf_fp)
     merged_unsorted_vcf = merged_vcf_fp.parent / f'{merged_vcf_fp.name}.unsorted.vcf.gz'
     merged_vcf = merged_vcf_fp.parent / f'{merged_vcf_fp.name}.vcf.gz'
 
-    # Prepare the bcftools merge command arguments
+    delimiter_padding = ' ' * 10
+    delimiter = f' \\\n{delimiter_padding}'
+
     command_args = [
         'bcftools merge',
         '-m all',
         '-Oz',
         f'-o {merged_unsorted_vcf}',
     ] + [str(vcf_file) for vcf_file in vcf_files]
-
-    # Format the command for readability
-    delimiter_padding = ' ' * 10
-    delimiter = f' \\\n{delimiter_padding}'
     command_args_str = delimiter.join(command_args)
-
-    command = f'''
+    execute_command(f'''
     {command_args_str}
-    '''
+    ''')
 
-    # Run the bcftools merge command
-    logger.info("Running bcftools merge...")
-    execute_command(command)
-    logger.info(f"Merged VCF written to: {merged_unsorted_vcf}")
-
-    # Sort the merged VCF file
     sort_command_args = [
         'bcftools sort',
         '-Oz',
@@ -189,30 +172,12 @@ def merge_vcf_files(vcf_files, merged_vcf_fp):
         f'{merged_unsorted_vcf}'
     ]
     sort_command_args_str = delimiter.join(sort_command_args)
-    sort_command = f'''
+    execute_command(f'''
     {sort_command_args_str}
-    '''
+    ''')
 
-    logger.info("Sorting merged VCF file...")
-    execute_command(sort_command)
-    logger.info(f"Sorted merged VCF written to: {merged_vcf}")
+    execute_command(f'bcftools index -t {merged_vcf}')
 
-    # Index the sorted merged VCF file
-    index_command_args = [
-        'bcftools index',
-        '-t',
-        f'{merged_vcf}'
-    ]
-    index_command_args_str = delimiter.join(index_command_args)
-    index_command = f'''
-    {index_command_args_str}
-    '''
-
-    logger.info("Indexing sorted merged VCF file...")
-    execute_command(index_command)
-    logger.info(f"Indexed merged VCF file: {merged_vcf}.tbi")
-
-    # Optionally, remove the unsorted merged VCF file
     if merged_unsorted_vcf.exists():
         merged_unsorted_vcf.unlink()
 
