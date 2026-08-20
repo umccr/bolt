@@ -115,6 +115,8 @@ def entry(ctx, **kwargs):
     # PCGR report
     purple_data = parse_purple_purity_file(kwargs['purple_purity_fp'])
 
+    # PCGR capacity limit: tiered filtering when passing variants exceed the threshold.
+    # Gates on filter_pass (variants that actually reach PCGR), not raw_pass.
     if variant_counts_process['filter_pass'] <= constants.MAX_SOMATIC_VARIANTS:
         pcgr_input_vcf_fp = kwargs['vcf_fp']
     else:
@@ -255,6 +257,7 @@ def count_variant_process(vcf_fp):
         'dragen': 0,
         'sage': 0,
         'annotated': 0,
+        'raw_pass': 0,
         'filter_pass': 0,
     }
 
@@ -290,6 +293,10 @@ def count_variant_process(vcf_fp):
         if record.INFO.get(constants.VcfInfo.SAGE_NOVEL.value) is None:
             counts['dragen'] += 1
 
+        # Caller-level PASS: DRAGEN raw PASS + SAGE novel, before bolt QC filters
+        if not record_filters_dragen:
+            counts['raw_pass'] += 1
+
         # All DRAGEN variants are passed to SAGE
         counts['sage'] += 1
 
@@ -301,7 +308,9 @@ def count_variant_process(vcf_fp):
         if not record.FILTER or rescued_filters:
             counts['filter_pass'] += 1
 
-    counts['is_hypermutated'] = counts['dragen'] > constants.MAX_SOMATIC_VARIANTS
+    # Curation hypermutated flag, reported in the Cancer Report. Uses raw_pass (DRAGEN raw
+    # PASS + SAGE novel), not filter_pass, which gates the PCGR capacity limit separately.
+    counts['is_hypermutated'] = counts['raw_pass'] > constants.MAX_SOMATIC_VARIANTS
     return counts
 
 
