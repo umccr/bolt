@@ -1,4 +1,6 @@
+import json
 import pathlib
+import sys
 
 
 import click
@@ -92,6 +94,16 @@ def entry(ctx, **kwargs):
         output_dir,
     )
 
+    raw_pass = count_raw_pass(pon_fp)
+    annotation_selection = {
+        'is_hypermutated': raw_pass > constants.MAX_SOMATIC_VARIANTS,
+        'filtering_type': selection_data['filtering_type'],
+    }
+    annotation_selection_fp = output_dir / f'{kwargs["tumor_name"]}.annotation_selection.json'
+    with annotation_selection_fp.open('w') as fh:
+        json.dump(annotation_selection, fh, indent=4)
+        fh.write('\n')
+
     if not (pcgr_prep_input_fp := selection_data.get('filtered')):
         pcgr_prep_input_fp = selection_data['selected']
 
@@ -174,32 +186,54 @@ def panel_of_normal_annotations(input_fp, tumor_name, threads, pon_dir, output_d
 
 def select_variants(input_fp, tumor_name, cancer_genes_fp, output_dir):
     # Exclude variants until we hopefully move the needle below the threshold
+    total_count = util.count_vcf_records(input_fp)
+    print(f"select_variants: {total_count} total variants, PCGR limit {constants.MAX_SOMATIC_VARIANTS}")
 
-
-    # TODO(SW): make clear logs of this data and process
-    # TODO(SW): generate in tempdir and keep only the one that passes; probably avoid doing this
-    # right now
-
-
-    if util.count_vcf_records(input_fp) <= constants.MAX_SOMATIC_VARIANTS:
-        return {'selected': input_fp}
+    if total_count <= constants.MAX_SOMATIC_VARIANTS:
+        print("select_variants: no filtering required")
+        return {'selected': input_fp, 'filtering_type': 'none'}
 
     pass_fps = exclude_nonpass(input_fp, tumor_name, output_dir)
-    if util.count_vcf_records(pass_fps.get('filtered')) <= constants.MAX_SOMATIC_VARIANTS:
+    pass_count = util.count_vcf_records(pass_fps.get('filtered'))
+    print(f"select_variants: excluded {total_count - pass_count} non-pass variants, {pass_count} retained")
+    if pass_count <= constants.MAX_SOMATIC_VARIANTS:
+        pass_fps['filtering_type'] = constants.VcfFilter.MAX_VARIANTS_NON_PASS.value
         return pass_fps
 
     pop_fps = exclude_population_variants(input_fp, tumor_name, output_dir)
-    if util.count_vcf_records(pop_fps.get('filtered')) <= constants.MAX_SOMATIC_VARIANTS:
+    pop_count = util.count_vcf_records(pop_fps.get('filtered'))
+    print(f"select_variants: excluded {total_count - pop_count} population variants, {pop_count} retained")
+    if pop_count <= constants.MAX_SOMATIC_VARIANTS:
+        pop_fps['filtering_type'] = constants.VcfFilter.MAX_VARIANTS_GNOMAD.value
         return pop_fps
 
     genes_fps = exclude_non_cancer_genes(input_fp, tumor_name, cancer_genes_fp, output_dir)
-    if util.count_vcf_records(genes_fps.get('filtered')) <= constants.MAX_SOMATIC_VARIANTS:
+    genes_count = util.count_vcf_records(genes_fps.get('filtered'))
+    print(f"select_variants: excluded {total_count - genes_count} non-cancer-gene variants, {genes_count} retained")
+    if genes_count <= constants.MAX_SOMATIC_VARIANTS:
+        genes_fps['filtering_type'] = constants.VcfFilter.MAX_VARIANTS_NON_CANCER_GENES.value
+        return genes_fps
 
-        # TODO(SW): log warning
+    # It is technically possible but biologically infeasible for there to be more than 500,000
+    # variants only in the cancer genes; exit here with a clear message
+    print(
+        f"select_variants: {genes_count} variants remain after the cancer-gene filter, "
+        f"exceeding MAX_SOMATIC_VARIANTS ({constants.MAX_SOMATIC_VARIANTS}); "
+        f"PCGR cannot process this sample",
+        file=sys.stderr,
+    )
+    sys.exit(1)
 
-        pass
 
-    return genes_fps
+def count_raw_pass(vcf_fp):
+    # DRAGEN caller-level PASS + SAGE novel, before bolt variant filters. At the annotate step the
+    # only FILTERs present are DRAGEN caller filters, so a variant with no non-PASS FILTER is
+    # raw PASS. Matches report.py's raw_pass, which recovers the same value from the filtered VCF.
+    count = 0
+    for record in cyvcf2.VCF(vcf_fp):
+        if not record.FILTER or record.FILTER == 'PASS':
+            count += 1
+    return count
 
 
 def generic_exclude(input_fp, tumor_name, label, header_enum, process_fn, output_dir, **kwargs):
