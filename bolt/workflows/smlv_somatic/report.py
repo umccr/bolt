@@ -235,6 +235,7 @@ def count_variant_process(vcf_fp):
         'dragen': 0,
         'sage': 0,
         'annotated': 0,
+        'raw_pass': 0,
         'filter_pass': 0,
     }
 
@@ -270,6 +271,10 @@ def count_variant_process(vcf_fp):
         if record.INFO.get(constants.VcfInfo.SAGE_NOVEL.value) is None:
             counts['dragen'] += 1
 
+        # Caller-level PASS: DRAGEN raw PASS + SAGE novel, before bolt variant filters
+        if not record_filters_dragen:
+            counts['raw_pass'] += 1
+
         # All DRAGEN variants are passed to SAGE
         counts['sage'] += 1
 
@@ -281,6 +286,8 @@ def count_variant_process(vcf_fp):
         if not record.FILTER or rescued_filters:
             counts['filter_pass'] += 1
 
+    # Curation hypermutated flag, keyed on raw_pass not filter_pass
+    counts['is_hypermutated'] = counts['raw_pass'] > constants.MAX_SOMATIC_VARIANTS
     return counts
 
 
