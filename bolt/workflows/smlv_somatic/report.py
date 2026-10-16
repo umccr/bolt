@@ -22,6 +22,7 @@ from ...common import pcgr
 @click.option('--vcf_fp', required=True, type=click.Path(exists=True))
 @click.option('--vcf_filters_fp', required=True, type=click.Path(exists=True))
 @click.option('--vcf_dragen_fp', required=True, type=click.Path(exists=True))
+@click.option('--annotation_selection_fp', required=True, type=click.Path(exists=True))
 
 @click.option('--pcgr_conda', required=False, type=str)
 @click.option('--pcgrr_conda', required=False, type=str)
@@ -98,6 +99,10 @@ def entry(ctx, **kwargs):
     # Variant process counts
     # NOTE(SW): this is intended to preserve counts in the Cancer Report
     variant_counts_process = count_variant_process(kwargs['vcf_filters_fp'])
+    annotation_selection = read_annotation_selection(kwargs['annotation_selection_fp'])
+
+    variant_counts_process['is_hypermutated'] = annotation_selection['is_hypermutated']
+    variant_counts_process['filtering_type'] = annotation_selection['filtering_type']
     variant_counts_process_fn = f'{kwargs["tumor_name"]}.somatic.variant_counts_process.json'
     variant_counts_process_fp = output_dir / variant_counts_process_fn
     with variant_counts_process_fp.open('w') as fh:
@@ -234,6 +239,7 @@ def count_variant_process(vcf_fp):
     counts = {
         'dragen': 0,
         'sage': 0,
+        'raw_pass': 0,
         'annotated': 0,
         'filter_pass': 0,
     }
@@ -273,6 +279,10 @@ def count_variant_process(vcf_fp):
         # All DRAGEN variants are passed to SAGE
         counts['sage'] += 1
 
+        # Caller-level PASS: DRAGEN raw PASS + SAGE novel, before bolt variant filters
+        if not record_filters_dragen:
+            counts['raw_pass'] += 1
+
         # Variants can be excluded for annotation when there are too many present
         if not record_filters_bolt_annotation:
             counts['annotated'] += 1
@@ -282,6 +292,11 @@ def count_variant_process(vcf_fp):
             counts['filter_pass'] += 1
 
     return counts
+
+
+def read_annotation_selection(fp):
+    with open(fp, 'r') as fh:
+        return json.load(fh)
 
 
 def parse_purple_purity_file(fp):
