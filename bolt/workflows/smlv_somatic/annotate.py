@@ -134,6 +134,8 @@ def set_filter_pass(input_fp, tumor_name, output_dir):
             record.FILTER = 'PASS'
         output_fh.write_record(record)
 
+    output_fh.close()
+
     return output_fp
 
 
@@ -212,6 +214,9 @@ def generic_exclude(input_fp, tumor_name, label, header_enum, process_fn, output
 
     for record in input_fh:
         process_fn(record, selected_fh=selected_fh, filtered_fh=filtered_fh, **kwargs)
+
+    selected_fh.close()
+    filtered_fh.close()
 
     return {'selected': selected_fp, 'filtered': filtered_fp, 'filter_name': header_enum.value}
 
