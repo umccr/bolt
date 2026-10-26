@@ -147,6 +147,8 @@ def bcftools_stats_prepare(input_fp, tumor_name, output_dir):
 
         output_fh.write_record(record)
 
+    output_fh.close()
+
     return output_fp
 
 
