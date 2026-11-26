@@ -285,6 +285,8 @@ def transfer_annotations_somatic(input_fp, tumor_name, filter_name, pcgr_dir, ou
         record_ann = annotate_record(record, pcgr_data)
         output_fh.write_record(record_ann)
 
+    output_fh.close()
+
 
 def transfer_annotations_germline(input_fp, normal_name, cpsr_dir, output_dir):
     # Set destination INFO field names and source TSV fields
@@ -324,6 +326,8 @@ def transfer_annotations_germline(input_fp, normal_name, cpsr_dir, output_dir):
         # NOTE(SW): allow missing CPSR annotations for input variants, CPSR seems to drop some
         record_ann = annotate_record(record, cpsr_data, allow_missing=True)
         output_fh.write_record(record_ann)
+
+    output_fh.close()
 
 
 def check_annotation_headers(info_field_map, vcf_fp):

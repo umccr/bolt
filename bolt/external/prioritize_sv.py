@@ -108,6 +108,8 @@ def run(
         )
         w.write_record(rec)
 
+    w.close()
+
 
 def _read_list(fpath):
     out_set = set()
